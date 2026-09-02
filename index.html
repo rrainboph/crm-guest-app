@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CRM Гостей</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800 p-4 sm:p-6">
+  <script>
+    // Подключение к твоей базе данных
+    const SUPABASE_URL = 'ВСТАВЬ_СЮДА_PROJECT_URL';
+    const SUPABASE_KEY = 'ВСТАВЬ_СЮДА_PUBLISHABLE_KEY';
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  </script>
+
+  <div class="max-w-4xl mx-auto space-y-6">
+    <!-- Шапка -->
+    <header class="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900">Ресторанная CRM</h1>
+        <p class="text-sm text-slate-500">📍 Филиал: <span class="font-medium text-slate-700">Куйбышева</span></p>
+      </div>
+      <span class="bg-emerald-100 text-emerald-800 text-xs font-semibold px-3 py-1 rounded-full">Управляющий</span>
+    </header>
+
+    <!-- Сводка на Сегодня -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+        <p class="text-xs text-slate-500 font-medium">🎂 Дни рождения</p>
+        <p class="text-2xl font-bold text-amber-600 mt-1">1</p>
+      </div>
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+        <p class="text-xs text-slate-500 font-medium">⭐ VIP-гости</p>
+        <p class="text-2xl font-bold text-indigo-600 mt-1">1</p>
+      </div>
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+        <p class="text-xs text-slate-500 font-medium">✨ Новые за неделю</p>
+        <p class="text-2xl font-bold text-emerald-600 mt-1">8</p>
+      </div>
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+        <p class="text-xs text-slate-500 font-medium">⚠️ Не были > 30 дней</p>
+        <p class="text-2xl font-bold text-rose-600 mt-1">17</p>
+      </div>
+    </div>
+
+    <!-- Поиск -->
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+      <input type="text" id="search" placeholder="🔍 Поиск гостя по имени или номеру телефона..." 
+        class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+    </div>
+
+    <!-- Список гостей -->
+    <div id="guests-list" class="space-y-4">
+      <p class="text-center text-slate-400 py-8">Загрузка данных из базы...</p>
+    </div>
+  </div>
+
+  <script>
+    async function loadGuests() {
+      const { data: guests, error } = await supabase.from('guests').select('*');
+      const container = document.getElementById('guests-list');
+      
+      if (error) {
+        container.innerHTML = `<div class="p-4 bg-red-50 text-red-600 rounded-xl">Ошибка загрузки: ${error.message}</div>`;
+        return;
+      }
+
+      container.innerHTML = guests.map(guest => `
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-3">
+          <div class="flex justify-between items-start">
+            <div>
+              <h2 class="text-lg font-bold text-slate-900">${guest.full_name}</h2>
+              <p class="text-sm text-slate-500">📞 ${guest.phone}</p>
+            </div>
+            <span class="bg-amber-100 text-amber-800 text-xs font-bold px-2.5 py-1 rounded border border-amber-200">
+              ${guest.category}
+            </span>
+          </div>
+
+          <div class="grid sm:grid-cols-2 gap-2 text-sm pt-2 border-t border-slate-100">
+            <div>
+              <span class="font-medium text-slate-700">🎂 День рождения:</span>
+              <p class="text-slate-600">${guest.birth_date || 'Не указан'}</p>
+            </div>
+            <div>
+              <span class="font-medium text-slate-700">❤️ Предпочтения:</span>
+              <p class="text-slate-600">${guest.preferences || 'Нет заметок'}</p>
+            </div>
+          </div>
+
+          <div class="bg-amber-50 p-3 rounded-lg text-xs text-amber-900 border border-amber-200/60">
+            <strong>💬 Важная информация:</strong> ${guest.important_info || 'Особенностей нет'}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    loadGuests();
+  </script>
+</body>
+</html>
