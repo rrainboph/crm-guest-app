@@ -23,53 +23,116 @@
         <h1 class="text-xl font-bold text-slate-900">Ресторанная CRM</h1>
         <p class="text-sm text-slate-500">📍 Филиал: <span class="font-medium text-slate-700">Куйбышева</span></p>
       </div>
-      <span class="bg-emerald-100 text-emerald-800 text-xs font-semibold px-3 py-1 rounded-full">Управляющий</span>
+      <button onclick="toggleModal(true)" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition shadow-sm">
+        + Новый гость
+      </button>
     </header>
 
     <!-- Сводка на Сегодня -->
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
       <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-        <p class="text-xs text-slate-500 font-medium">🎂 Дни рождения</p>
-        <p class="text-2xl font-bold text-amber-600 mt-1">1</p>
+        <p class="text-xs text-slate-500 font-medium">🎂 Именинники</p>
+        <p id="stat-birthdays" class="text-2xl font-bold text-amber-600 mt-1">0</p>
       </div>
       <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
         <p class="text-xs text-slate-500 font-medium">⭐ VIP-гости</p>
-        <p class="text-2xl font-bold text-indigo-600 mt-1">1</p>
+        <p id="stat-vip" class="text-2xl font-bold text-indigo-600 mt-1">0</p>
       </div>
       <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-        <p class="text-xs text-slate-500 font-medium">✨ Новые за неделю</p>
-        <p class="text-2xl font-bold text-emerald-600 mt-1">8</p>
+        <p class="text-xs text-slate-500 font-medium">✨ Всего гостей</p>
+        <p id="stat-total" class="text-2xl font-bold text-emerald-600 mt-1">0</p>
       </div>
       <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-        <p class="text-xs text-slate-500 font-medium">⚠️ Не были > 30 дней</p>
-        <p class="text-2xl font-bold text-rose-600 mt-1">17</p>
+        <p class="text-xs text-slate-500 font-medium">⚠️ Проблемные</p>
+        <p id="stat-problem" class="text-2xl font-bold text-rose-600 mt-1">0</p>
       </div>
     </div>
 
     <!-- Поиск -->
     <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-      <input type="text" id="search" placeholder="🔍 Поиск гостя по имени или номеру телефона..." 
+      <input type="text" id="search" oninput="filterGuests()" placeholder="🔍 Поиск гостя по имени или номеру телефона..." 
         class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
     </div>
 
     <!-- Список гостей -->
     <div id="guests-list" class="space-y-4">
-      <p class="text-center text-slate-400 py-8">Загрузка данных из базы...</p>
+      <p class="text-center text-slate-400 py-8">Загрузка данных...</p>
+    </div>
+  </div>
+
+  <!-- Модальное окно добавления гостя -->
+  <div id="guest-modal" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 space-y-4">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="text-lg font-bold text-slate-900">Новый гость</h3>
+        <button onclick="toggleModal(false)" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+      </div>
+      <form id="add-guest-form" onsubmit="saveGuest(event)" class="space-y-3">
+        <div>
+          <label class="block text-xs font-medium text-slate-700 mb-1">ФИО *</label>
+          <input type="text" id="full_name" required placeholder="Анна Ким" class="w-full px-3 py-2 border rounded-lg text-sm">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Телефон *</label>
+            <input type="text" id="phone" required placeholder="+996..." class="w-full px-3 py-2 border rounded-lg text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Дата рождения</label>
+            <input type="date" id="birth_date" class="w-full px-3 py-2 border rounded-lg text-sm">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-700 mb-1">Категория</label>
+          <select id="category" class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
+            <option value="NEW">Новый</option>
+            <option value="REGULAR">Постоянный</option>
+            <option value="VIP">VIP</option>
+            <option value="PROBLEM">Проблемный</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-700 mb-1">Предпочтения (любимые блюда, стол)</label>
+          <input type="text" id="preferences" placeholder="Любит капучино, стол у окна" class="w-full px-3 py-2 border rounded-lg text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-700 mb-1">Важная информация (аллергии)</label>
+          <input type="text" id="important_info" placeholder="Аллергия на орехи, ребенок" class="w-full px-3 py-2 border rounded-lg text-sm">
+        </div>
+        <div class="flex justify-end gap-2 pt-3 border-t">
+          <button type="button" onclick="toggleModal(false)" class="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Отмена</button>
+          <button type="submit" class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg">Сохранить</button>
+        </div>
+      </form>
     </div>
   </div>
 
   <script>
+    let allGuests = [];
+    const BRANCH_ID = '11111111-1111-1111-1111-111111111111';
+
     async function loadGuests() {
-      const { data: guests, error } = await supabaseClient.from('guests').select('*');
-      const container = document.getElementById('guests-list');
-      
+      const { data: guests, error } = await supabaseClient.from('guests').select('*').order('created_at', { ascending: false });
       if (error) {
-        container.innerHTML = `<div class="p-4 bg-red-50 text-red-600 rounded-xl">Ошибка загрузки: ${error.message}</div>`;
+        document.getElementById('guests-list').innerHTML = `<div class="p-4 bg-red-50 text-red-600 rounded-xl">Ошибка: ${error.message}</div>`;
         return;
       }
+      allGuests = guests || [];
+      updateStats();
+      renderGuests(allGuests);
+    }
 
-      if (!guests || guests.length === 0) {
-        container.innerHTML = `<div class="p-4 bg-white rounded-xl text-center text-slate-500">Гости не найдены</div>`;
+    function updateStats() {
+      document.getElementById('stat-total').innerText = allGuests.length;
+      document.getElementById('stat-vip').innerText = allGuests.filter(g => g.category === 'VIP').length;
+      document.getElementById('stat-problem').innerText = allGuests.filter(g => g.category === 'PROBLEM').length;
+      document.getElementById('stat-birthdays').innerText = allGuests.filter(g => g.birth_date).length;
+    }
+
+    function renderGuests(guests) {
+      const container = document.getElementById('guests-list');
+      if (!guests.length) {
+        container.innerHTML = `<div class="p-8 bg-white rounded-xl text-center text-slate-400">Гости не найдены</div>`;
         return;
       }
 
@@ -80,7 +143,7 @@
               <h2 class="text-lg font-bold text-slate-900">${guest.full_name}</h2>
               <p class="text-sm text-slate-500">📞 ${guest.phone}</p>
             </div>
-            <span class="bg-amber-100 text-amber-800 text-xs font-bold px-2.5 py-1 rounded border border-amber-200">
+            <span class="px-2.5 py-1 rounded text-xs font-bold ${getCategoryBadge(guest.category)}">
               ${guest.category}
             </span>
           </div>
@@ -101,6 +164,49 @@
           </div>
         </div>
       `).join('');
+    }
+
+    function getCategoryBadge(cat) {
+      switch(cat) {
+        case 'VIP': return 'bg-indigo-100 text-indigo-800 border border-indigo-200';
+        case 'PROBLEM': return 'bg-rose-100 text-rose-800 border border-rose-200';
+        case 'REGULAR': return 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+        default: return 'bg-slate-100 text-slate-800 border border-slate-200';
+      }
+    }
+
+    function filterGuests() {
+      const q = document.getElementById('search').value.toLowerCase();
+      const filtered = allGuests.filter(g => 
+        g.full_name.toLowerCase().includes(q) || g.phone.includes(q)
+      );
+      renderGuests(filtered);
+    }
+
+    function toggleModal(show) {
+      document.getElementById('guest-modal').classList.toggle('hidden', !show);
+    }
+
+    async function saveGuest(e) {
+      e.preventDefault();
+      const newGuest = {
+        full_name: document.getElementById('full_name').value,
+        phone: document.getElementById('phone').value,
+        birth_date: document.getElementById('birth_date').value || null,
+        category: document.getElementById('category').value,
+        preferences: document.getElementById('preferences').value,
+        important_info: document.getElementById('important_info').value,
+        branch_id: BRANCH_ID
+      };
+
+      const { error } = await supabaseClient.from('guests').insert([newGuest]);
+      if (error) {
+        alert('Ошибка добавления: ' + error.message);
+      } else {
+        toggleModal(false);
+        document.getElementById('add-guest-form').reset();
+        loadGuests();
+      }
     }
 
     loadGuests();
