@@ -31,7 +31,7 @@
     <!-- Сводка Сегодня -->
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
       <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-        <p class="text-xs text-slate-500 font-medium">🎂 Именинники (30 дн)</p>
+        <p class="text-xs text-slate-500 font-medium">🎂 Именинники</p>
         <p id="stat-birthdays" class="text-2xl font-bold text-amber-600 mt-1">0</p>
       </div>
       <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
@@ -107,6 +107,22 @@
     </div>
   </div>
 
+  <!-- Модальное окно управления визитами -->
+  <div id="visits-modal" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="text-lg font-bold text-slate-900">История визитов</h3>
+        <button onclick="toggleVisitsModal(false)" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+      </div>
+      <div id="visits-modal-list" class="space-y-2 max-h-60 overflow-y-auto pr-1">
+        <!-- Список визитов рендерится здесь -->
+      </div>
+      <div class="flex justify-end pt-3 border-t">
+        <button type="button" onclick="toggleVisitsModal(false)" class="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     let allGuests = [];
     const BRANCH_ID = '11111111-1111-1111-1111-111111111111';
@@ -173,9 +189,14 @@
               </div>
               <p class="text-sm text-slate-500 mt-0.5">📞 ${guest.phone} | 📍 Филиал: Куйбышева</p>
             </div>
-            <button onclick="recordVisit('${guest.id}')" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold px-3 py-1.5 rounded-lg border border-emerald-200 transition">
-              + Отметить визит
-            </button>
+            <div class="flex gap-2">
+              <button onclick="openVisitsModal('${guest.id}')" title="Управление визитами" class="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition">
+                ⚙️ Визиты
+              </button>
+              <button onclick="recordVisit('${guest.id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition shadow-sm">
+                + Отметить визит
+              </button>
+            </div>
           </div>
 
           <!-- Основные данные -->
@@ -186,10 +207,10 @@
             </div>
             <div>
               <span class="font-medium text-slate-500 text-xs block">📅 Последний визит</span>
-              <p class="text-slate-800 font-medium">${lastVisitStr} <span class="text-xs font-normal text-slate-400">(${visits.length} всего)</span></p>
+              <p class="text-slate-800 font-medium">${lastVisitStr} <button onclick="openVisitsModal('${guest.id}')" class="text-xs text-indigo-600 underline font-normal ml-1">(${visits.length} всего)</button></p>
             </div>
             <div>
-              <span class="font-medium text-slate-500 text-xs block">❤️ Предпочтения</span>
+              <span class="font-medium text-slate-700 text-xs block">❤️ Предпочтения</span>
               <p class="text-slate-800">${guest.preferences || 'Не указаны'}</p>
             </div>
           </div>
@@ -256,10 +277,63 @@
       document.getElementById('guest-modal').classList.toggle('hidden', !show);
     }
 
+    function toggleVisitsModal(show) {
+      document.getElementById('visits-modal').classList.toggle('hidden', !show);
+    }
+
+    // Защита от спам-кликов и повторных визитов за день
     async function recordVisit(guestId) {
+      const guest = allGuests.find(g => g.id === guestId);
+      const visits = guest?.visit_history || [];
+      const todayDate = new Date().toDateString();
+
+      const hasVisitToday = visits.some(v => new Date(v.visit_date).toDateString() === todayDate);
+
+      if (hasVisitToday) {
+        if (!confirm(`Для гостя ${guest.full_name} сегодня уже был отмечен визит.\nВы точно хотите добавить еще один?`)) {
+          return;
+        }
+      }
+
       const { error } = await supabaseClient.from('visit_history').insert([{ guest_id: guestId }]);
       if (error) alert('Ошибка: ' + error.message);
       else loadGuests();
+    }
+
+    // Открытие окна с историей визитов и кнопками удаления
+    function openVisitsModal(guestId) {
+      const guest = allGuests.find(g => g.id === guestId);
+      const visits = (guest?.visit_history || []).sort((a,b) => new Date(b.visit_date) - new Date(a.visit_date));
+      
+      const container = document.getElementById('visits-modal-list');
+      if (visits.length === 0) {
+        container.innerHTML = '<p class="text-slate-400 text-xs text-center py-4">У гостя пока нет зафиксированных визитов</p>';
+      } else {
+        container.innerHTML = visits.map(v => `
+          <div class="flex justify-between items-center bg-slate-50 p-2.5 rounded-lg text-xs border border-slate-200">
+            <div>
+              <span class="font-medium text-slate-800">🗓️ ${new Date(v.visit_date).toLocaleString('ru-RU')}</span>
+            </div>
+            <button onclick="deleteVisit('${v.id}', '${guestId}')" class="text-rose-600 hover:text-rose-800 font-bold px-2 py-1 rounded bg-rose-50 hover:bg-rose-100 transition">
+              Удалить
+            </button>
+          </div>
+        `).join('');
+      }
+      toggleVisitsModal(true);
+    }
+
+    // Удаление ошибочно добавленного визита
+    async function deleteVisit(visitId, guestId) {
+      if (!confirm('Отменить и удалить эту запись о визите?')) return;
+
+      const { error } = await supabaseClient.from('visit_history').delete().eq('id', visitId);
+      if (error) {
+        alert('Ошибка удаления: ' + error.message);
+      } else {
+        await loadGuests();
+        openVisitsModal(guestId); // обновляем список в модальном окне
+      }
     }
 
     async function addComment(guestId) {
