@@ -14,34 +14,71 @@
     
     const { createClient } = window.supabase;
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // База ключей доступа и ролей
+    const ACCESS_KEYS = {
+      '1111': { role: 'BRANCH_MANAGER', branchId: '11111111-1111-1111-1111-111111111111', name: 'Управляющий (ул. Куйбышева)' },
+      '2222': { role: 'BRANCH_MANAGER', branchId: '22222222-2222-2222-2222-222222222222', name: 'Управляющий (пр. Чуй)' },
+      '7777': { role: 'GENERAL_MANAGER', branchId: 'ALL', name: 'Генеральный директор (Сеть)' }
+    };
+
+    let currentSession = null;
   </script>
 
-  <div class="max-w-5xl mx-auto space-y-6">
+  <!-- Экран Входа (Авторизация по Ключу) -->
+  <div id="auth-screen" class="fixed inset-0 bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center space-y-5">
+      <div class="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center mx-auto text-2xl font-bold">
+        🔑
+      </div>
+      <div>
+        <h2 class="text-xl font-bold text-slate-900">Авторизация CRM</h2>
+        <p class="text-xs text-slate-500 mt-1">Вводите ваш персональный ключ доступа</p>
+      </div>
+      <form onsubmit="handleAuth(event)" class="space-y-4">
+        <input type="password" id="access-key-input" required placeholder="Введите ключ..." 
+          class="w-full text-center tracking-widest text-lg px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        <p id="auth-error" class="text-xs text-rose-600 hidden font-medium">Неверный ключ доступа</p>
+        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition shadow-md">
+          Войти в систему
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Основной интерфейс CRM -->
+  <div id="app-screen" class="hidden max-w-5xl mx-auto space-y-6">
     <!-- Шапка -->
     <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-xl shadow-sm border border-slate-200 gap-4">
       <div>
-        <h1 class="text-xl font-bold text-slate-900">Ресторанная CRM</h1>
+        <div class="flex items-center gap-2">
+          <h1 class="text-xl font-bold text-slate-900">Ресторанная CRM</h1>
+          <span id="user-role-badge" class="px-2 py-0.5 text-[10px] font-bold rounded bg-indigo-100 text-indigo-800"></span>
+        </div>
         <div class="flex items-center gap-2 mt-1">
           <span class="text-xs text-slate-500 font-medium">📍 Филиал:</span>
           <select id="branch-select" onchange="changeBranch()" class="text-xs font-semibold bg-slate-100 border border-slate-200 rounded-md px-2 py-1 text-slate-700 focus:outline-none">
             <option value="ALL">🌐 Все филиалы (Вся сеть)</option>
-            <option value="11111111-1111-1111-1111-111111111111" selected>ул. Куйбышева</option>
+            <option value="11111111-1111-1111-1111-111111111111">ул. Куйбышева</option>
             <option value="22222222-2222-2222-2222-222222222222">пр. Чуй</option>
             <option value="33333333-3333-3333-3333-333333333333">пр. Манаса</option>
           </select>
         </div>
       </div>
       <div class="flex items-center gap-2 w-full sm:w-auto">
-        <button onclick="exportToCSV()" class="flex-1 sm:flex-none bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-3 py-2 rounded-lg transition border border-slate-200 flex items-center justify-center gap-1">
+        <button id="export-btn" onclick="exportToCSV()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-3 py-2 rounded-lg transition border border-slate-200 flex items-center justify-center gap-1">
           📥 Экспорт CSV
         </button>
-        <button onclick="openCreateModal()" class="flex-1 sm:flex-none bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition shadow-sm text-center">
+        <button onclick="openCreateModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition shadow-sm text-center">
           + Новый гость
+        </button>
+        <button onclick="logout()" title="Выйти из системы" class="bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold px-3 py-2 rounded-lg transition">
+          🚪 Выйти
         </button>
       </div>
     </header>
 
-    <!-- Сводка Сегодня (Интерактивные виджеты) -->
+    <!-- Сводка Сегодня -->
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
       <div onclick="setFilter('BIRTHDAYS')" id="card-birthdays" class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 cursor-pointer hover:border-amber-400 transition">
         <p class="text-xs text-slate-500 font-medium">🎂 ДР в скором времени (7 дн)</p>
@@ -52,7 +89,7 @@
         <p id="stat-vip" class="text-2xl font-bold text-indigo-600 mt-1">0</p>
       </div>
       <div onclick="setFilter('ALL')" id="card-total" class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 cursor-pointer hover:border-emerald-400 border-2 border-emerald-500 transition">
-        <p class="text-xs text-slate-500 font-medium">✨ Всего в базе</p>
+        <p class="text-xs text-slate-500 font-medium">✨ Всего гостей</p>
         <p id="stat-total" class="text-2xl font-bold text-emerald-600 mt-1">0</p>
       </div>
       <div onclick="setFilter('INACTIVE')" id="card-inactive" class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 cursor-pointer hover:border-rose-400 transition">
@@ -85,7 +122,6 @@
         <button onclick="toggleModal(false)" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
       </div>
       <form id="add-guest-form" onsubmit="saveGuest(event)" class="space-y-3">
-        <!-- Скрытое поле ID для редактирования -->
         <input type="hidden" id="edit_guest_id">
 
         <div>
@@ -143,7 +179,60 @@
 
   <script>
     let allGuests = [];
-    let currentFilterMode = 'ALL'; // ALL, VIP, INACTIVE, BIRTHDAYS
+    let currentFilterMode = 'ALL';
+
+    // Авторизация
+    function handleAuth(e) {
+      e.preventDefault();
+      const key = document.getElementById('access-key-input').value.trim();
+      
+      if (ACCESS_KEYS[key]) {
+        currentSession = ACCESS_KEYS[key];
+        localStorage.setItem('crm_access_key', key);
+        initApp();
+      } else {
+        document.getElementById('auth-error').classList.remove('hidden');
+      }
+    }
+
+    function checkSavedSession() {
+      const savedKey = localStorage.getItem('crm_access_key');
+      if (savedKey && ACCESS_KEYS[savedKey]) {
+        currentSession = ACCESS_KEYS[savedKey];
+        initApp();
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem('crm_access_key');
+      currentSession = null;
+      document.getElementById('app-screen').classList.add('hidden');
+      document.getElementById('auth-screen').classList.remove('hidden');
+      document.getElementById('access-key-input').value = '';
+    }
+
+    function initApp() {
+      document.getElementById('auth-screen').classList.add('hidden');
+      document.getElementById('app-screen').classList.remove('hidden');
+      document.getElementById('user-role-badge').innerText = currentSession.name;
+
+      const branchSelect = document.getElementById('branch-select');
+      const exportBtn = document.getElementById('export-btn');
+
+      if (currentSession.role === 'BRANCH_MANAGER') {
+        // Управляющий видит только свой филиал
+        branchSelect.value = currentSession.branchId;
+        branchSelect.disabled = true; // Запрет смены филиала
+        exportBtn.classList.add('hidden'); // Запрет экспорта базы
+      } else {
+        // Ген. Директор
+        branchSelect.value = 'ALL';
+        branchSelect.disabled = false;
+        exportBtn.classList.remove('hidden');
+      }
+
+      loadGuests();
+    }
 
     async function loadGuests() {
       const branchId = document.getElementById('branch-select').value;
@@ -253,7 +342,7 @@
     function renderGuests(guests) {
       const container = document.getElementById('guests-list');
       if (!guests.length) {
-        container.innerHTML = `<div class="p-8 bg-white rounded-xl text-center text-slate-400">Гости не найдены в этой категории</div>`;
+        container.innerHTML = `<div class="p-8 bg-white rounded-xl text-center text-slate-400">Гости не найдены</div>`;
         return;
       }
 
@@ -268,6 +357,7 @@
         }
 
         const birthdayWarning = isBirthdaySoon(guest.birth_date, 7) ? '🎉 <span class="text-amber-600 font-bold">Скоро ДР!</span>' : '';
+        const missingPreferences = !guest.preferences ? '<span class="text-amber-600 text-xs font-semibold block mt-0.5">⚠️ Укажите предпочтения!</span>' : '';
 
         return `
         <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4">
@@ -307,6 +397,7 @@
             <div>
               <span class="font-medium text-slate-700 text-xs block">❤️ Предпочтения</span>
               <p class="text-slate-800">${guest.preferences || 'Не указаны'}</p>
+              ${missingPreferences}
             </div>
           </div>
 
@@ -365,7 +456,6 @@
       document.getElementById('visits-modal').classList.toggle('hidden', !show);
     }
 
-    // Открытие модального окна для ДОБАВЛЕНИЯ
     function openCreateModal() {
       document.getElementById('modal-title').innerText = 'Новый гость';
       document.getElementById('edit_guest_id').value = '';
@@ -373,7 +463,6 @@
       toggleModal(true);
     }
 
-    // Открытие модального окна для РЕДАКТИРОВАНИЯ
     function openEditModal(guestId) {
       const guest = allGuests.find(g => g.id === guestId);
       if (!guest) return;
@@ -404,8 +493,16 @@
       }
 
       const { error } = await supabaseClient.from('visit_history').insert([{ guest_id: guestId }]);
-      if (error) alert('Ошибка: ' + error.message);
-      else loadGuests();
+      if (error) {
+        alert('Ошибка: ' + error.message);
+      } else {
+        // Запрос заметок при визите для системного ведения базы
+        const note = prompt(`Визит гостя ${guest.full_name} отмечен!\nДобавить короткую заметку (что заказывал, впечатления)?`);
+        if (note && note.trim()) {
+          await supabaseClient.from('guest_comments').insert([{ guest_id: guestId, comment: note.trim() }]);
+        }
+        loadGuests();
+      }
     }
 
     function openVisitsModal(guestId) {
@@ -452,7 +549,6 @@
       else loadGuests();
     }
 
-    // Сохранение (Создание или Обновление)
     async function saveGuest(e) {
       e.preventDefault();
       const guestId = document.getElementById('edit_guest_id').value;
@@ -470,10 +566,8 @@
 
       let error;
       if (guestId) {
-        // Редактирование существующего
         ({ error } = await supabaseClient.from('guests').update(guestData).eq('id', guestId));
       } else {
-        // Добавление нового
         guestData.branch_id = targetBranch;
         ({ error } = await supabaseClient.from('guests').insert([guestData]));
       }
@@ -488,6 +582,10 @@
     }
 
     function exportToCSV() {
+      if (currentSession.role !== 'GENERAL_MANAGER') {
+        return alert('Экспорт доступен только генеральному директору');
+      }
+
       if (!allGuests.length) return alert('Нет данных для экспорта');
 
       let csv = 'ФИО,Телефон,Дата Рождения,Категория,Предпочтения,Важное,Визитов Всего\n';
@@ -503,7 +601,8 @@
       link.click();
     }
 
-    loadGuests();
+    // Проверка сохраненной сессии при старте
+    checkSavedSession();
   </script>
 </body>
 </html>
