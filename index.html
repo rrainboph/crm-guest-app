@@ -9,10 +9,11 @@
 </head>
 <body class="bg-slate-100 min-h-screen text-slate-800 p-4 sm:p-6">
   <script>
-    // Подключение к твоей базе данных
-    const SUPABASE_URL = 'ВСТАВЬ_СЮДА_PROJECT_URL';
-    const SUPABASE_KEY = 'ВСТАВЬ_СЮДА_PUBLISHABLE_KEY';
-    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const SUPABASE_URL = 'https://dvuhuaqfgzcqoqriycyq.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_zGFa4777lnuhoIB1C20eIA_WTj6DOIW';
+    
+    const { createClient } = window.supabase;
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
   </script>
 
   <div class="max-w-4xl mx-auto space-y-6">
@@ -59,11 +60,16 @@
 
   <script>
     async function loadGuests() {
-      const { data: guests, error } = await supabase.from('guests').select('*');
+      const { data: guests, error } = await supabaseClient.from('guests').select('*');
       const container = document.getElementById('guests-list');
       
       if (error) {
         container.innerHTML = `<div class="p-4 bg-red-50 text-red-600 rounded-xl">Ошибка загрузки: ${error.message}</div>`;
+        return;
+      }
+
+      if (!guests || guests.length === 0) {
+        container.innerHTML = `<div class="p-4 bg-white rounded-xl text-center text-slate-500">Гости не найдены</div>`;
         return;
       }
 
