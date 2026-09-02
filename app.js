@@ -1,8 +1,8 @@
 // ==========================================
 // 1. НАСТРОЙКИ И КЛЮЧИ ДОСТУПА
 // ==========================================
-const SUPABASE_URL = 'https://ваш-проект.supabase.co'; // Замени на свой URL Supabase
-const SUPABASE_ANON_KEY = 'ваш-anon-ключ'; // Замени на свой ANON KEY Supabase
+const SUPABASE_URL = 'https://dvuhuaqfgzcqoqriycyq.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_zGFa4777lnuhoIB1C20eIA_WTj6DOIW';
 
 // Инициализация Supabase
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -291,7 +291,7 @@ function renderGuests(guests) {
         </div>
       ` : ''}
 
-      <!-- СЕКЦИЯ ЗАМЕТОК С КНОПКАМИ -->
+      <!-- Заметки управляющих с кнопками -->
       <div class="pt-2 border-t border-slate-100 space-y-2">
         <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Заметки управляющих</span>
         
