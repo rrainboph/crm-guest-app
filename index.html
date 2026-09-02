@@ -220,12 +220,10 @@
       const exportBtn = document.getElementById('export-btn');
 
       if (currentSession.role === 'BRANCH_MANAGER') {
-        // Управляющий видит только свой филиал
         branchSelect.value = currentSession.branchId;
-        branchSelect.disabled = true; // Запрет смены филиала
-        exportBtn.classList.add('hidden'); // Запрет экспорта базы
+        branchSelect.disabled = true;
+        exportBtn.classList.add('hidden');
       } else {
-        // Ген. Директор
         branchSelect.value = 'ALL';
         branchSelect.disabled = false;
         exportBtn.classList.remove('hidden');
@@ -372,7 +370,7 @@
               </div>
               <p class="text-sm text-slate-500 mt-0.5">📞 ${guest.phone}</p>
             </div>
-            <div class="flex gap-2">
+            <div class="flex items-center gap-2">
               <button onclick="openEditModal('${guest.id}')" title="Редактировать данные" class="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition">
                 ✏️ Редактировать
               </button>
@@ -381,6 +379,9 @@
               </button>
               <button onclick="recordVisit('${guest.id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition shadow-sm">
                 + Отметить визит
+              </button>
+              <button onclick="deleteGuest('${guest.id}')" title="Удалить карточку гостя" class="bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold px-2 py-1.5 rounded-lg transition">
+                🗑️
               </button>
             </div>
           </div>
@@ -479,6 +480,29 @@
       toggleModal(true);
     }
 
+    // Удаление гостя
+    async function deleteGuest(guestId) {
+      const guest = allGuests.find(g => g.id === guestId);
+      if (!guest) return;
+
+      if (!confirm(`Вы действительно хотите удалить гостя ${guest.full_name}?\nВсе связанные заметки и история визитов также будут удалены.`)) {
+        return;
+      }
+
+      // 1. Очищаем связанные данные
+      await supabaseClient.from('visit_history').delete().eq('guest_id', guestId);
+      await supabaseClient.from('guest_comments').delete().eq('guest_id', guestId);
+
+      // 2. Удаляем самого гостя
+      const { error } = await supabaseClient.from('guests').delete().eq('id', guestId);
+
+      if (error) {
+        alert('Ошибка при удалении: ' + error.message);
+      } else {
+        loadGuests();
+      }
+    }
+
     async function recordVisit(guestId) {
       const guest = allGuests.find(g => g.id === guestId);
       const visits = guest?.visit_history || [];
@@ -496,7 +520,6 @@
       if (error) {
         alert('Ошибка: ' + error.message);
       } else {
-        // Запрос заметок при визите для системного ведения базы
         const note = prompt(`Визит гостя ${guest.full_name} отмечен!\nДобавить короткую заметку (что заказывал, впечатления)?`);
         if (note && note.trim()) {
           await supabaseClient.from('guest_comments').insert([{ guest_id: guestId, comment: note.trim() }]);
@@ -601,7 +624,6 @@
       link.click();
     }
 
-    // Проверка сохраненной сессии при старте
     checkSavedSession();
   </script>
 </body>
