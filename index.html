@@ -35,7 +35,7 @@
         <button onclick="exportToCSV()" class="flex-1 sm:flex-none bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-3 py-2 rounded-lg transition border border-slate-200 flex items-center justify-center gap-1">
           📥 Экспорт CSV
         </button>
-        <button onclick="toggleModal(true)" class="flex-1 sm:flex-none bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition shadow-sm text-center">
+        <button onclick="openCreateModal()" class="flex-1 sm:flex-none bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition shadow-sm text-center">
           + Новый гость
         </button>
       </div>
@@ -77,14 +77,17 @@
     </div>
   </div>
 
-  <!-- Модальное окно добавления гостя -->
+  <!-- Модальное окно создания / редактирования гостя -->
   <div id="guest-modal" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
     <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 space-y-4">
       <div class="flex justify-between items-center border-b pb-3">
-        <h3 class="text-lg font-bold text-slate-900">Новый гость</h3>
+        <h3 id="modal-title" class="text-lg font-bold text-slate-900">Новый гость</h3>
         <button onclick="toggleModal(false)" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
       </div>
       <form id="add-guest-form" onsubmit="saveGuest(event)" class="space-y-3">
+        <!-- Скрытое поле ID для редактирования -->
+        <input type="hidden" id="edit_guest_id">
+
         <div>
           <label class="block text-xs font-medium text-slate-700 mb-1">ФИО *</label>
           <input type="text" id="full_name" required placeholder="Анна Ким" class="w-full px-3 py-2 border rounded-lg text-sm">
@@ -147,7 +150,6 @@
       
       let query = supabaseClient.from('guests').select('*, guest_comments(*), visit_history(*)');
       
-      // Если выбран конкретный филиал, фильтруем запрос
       if (branchId !== 'ALL') {
         query = query.eq('branch_id', branchId);
       }
@@ -167,7 +169,6 @@
       loadGuests();
     }
 
-    // Проверка дня рождения в ближайшие N дней
     function isBirthdaySoon(dateStr, daysAhead = 7) {
       if (!dateStr) return false;
       const today = new Date();
@@ -204,7 +205,6 @@
     function setFilter(mode) {
       currentFilterMode = mode;
       
-      // Сброс визуального выделения плашек
       ['total', 'vip', 'inactive', 'birthdays'].forEach(m => {
         document.getElementById(`card-${m}`).classList.remove('border-2', 'border-emerald-500', 'border-indigo-500', 'border-rose-500', 'border-amber-500');
       });
@@ -283,6 +283,9 @@
               <p class="text-sm text-slate-500 mt-0.5">📞 ${guest.phone}</p>
             </div>
             <div class="flex gap-2">
+              <button onclick="openEditModal('${guest.id}')" title="Редактировать данные" class="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition">
+                ✏️ Редактировать
+              </button>
               <button onclick="openVisitsModal('${guest.id}')" title="Управление визитами" class="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition">
                 ⚙️ Визиты
               </button>
@@ -362,6 +365,31 @@
       document.getElementById('visits-modal').classList.toggle('hidden', !show);
     }
 
+    // Открытие модального окна для ДОБАВЛЕНИЯ
+    function openCreateModal() {
+      document.getElementById('modal-title').innerText = 'Новый гость';
+      document.getElementById('edit_guest_id').value = '';
+      document.getElementById('add-guest-form').reset();
+      toggleModal(true);
+    }
+
+    // Открытие модального окна для РЕДАКТИРОВАНИЯ
+    function openEditModal(guestId) {
+      const guest = allGuests.find(g => g.id === guestId);
+      if (!guest) return;
+
+      document.getElementById('modal-title').innerText = 'Редактировать гостя';
+      document.getElementById('edit_guest_id').value = guest.id;
+      document.getElementById('full_name').value = guest.full_name || '';
+      document.getElementById('phone').value = guest.phone || '';
+      document.getElementById('birth_date').value = guest.birth_date || '';
+      document.getElementById('category').value = guest.category || 'NEW';
+      document.getElementById('preferences').value = guest.preferences || '';
+      document.getElementById('important_info').value = guest.important_info || '';
+
+      toggleModal(true);
+    }
+
     async function recordVisit(guestId) {
       const guest = allGuests.find(g => g.id === guestId);
       const visits = guest?.visit_history || [];
@@ -424,24 +452,34 @@
       else loadGuests();
     }
 
+    // Сохранение (Создание или Обновление)
     async function saveGuest(e) {
       e.preventDefault();
+      const guestId = document.getElementById('edit_guest_id').value;
       const currentBranch = document.getElementById('branch-select').value;
       const targetBranch = currentBranch === 'ALL' ? '11111111-1111-1111-1111-111111111111' : currentBranch;
 
-      const newGuest = {
+      const guestData = {
         full_name: document.getElementById('full_name').value,
         phone: document.getElementById('phone').value,
         birth_date: document.getElementById('birth_date').value || null,
         category: document.getElementById('category').value,
         preferences: document.getElementById('preferences').value,
-        important_info: document.getElementById('important_info').value,
-        branch_id: targetBranch
+        important_info: document.getElementById('important_info').value
       };
 
-      const { error } = await supabaseClient.from('guests').insert([newGuest]);
+      let error;
+      if (guestId) {
+        // Редактирование существующего
+        ({ error } = await supabaseClient.from('guests').update(guestData).eq('id', guestId));
+      } else {
+        // Добавление нового
+        guestData.branch_id = targetBranch;
+        ({ error } = await supabaseClient.from('guests').insert([guestData]));
+      }
+
       if (error) {
-        alert('Ошибка добавления: ' + error.message);
+        alert('Ошибка сохранения: ' + error.message);
       } else {
         toggleModal(false);
         document.getElementById('add-guest-form').reset();
@@ -449,7 +487,6 @@
       }
     }
 
-    // Выгрузка текущей выборки в Excel/CSV
     function exportToCSV() {
       if (!allGuests.length) return alert('Нет данных для экспорта');
 
