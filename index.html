@@ -77,7 +77,7 @@
 
       <div class="flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap">
         <button id="export-btn" onclick="exportToCSV()" class="flex-1 sm:flex-none bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs sm:text-sm font-semibold px-3 py-2.5 rounded-xl transition border border-slate-200 flex items-center justify-center gap-1.5">
-          📥 <span class="hidden sm:inline">Экспорт</span> CSV
+          📥 <span class="hidden sm:inline">Экспорт</span> CSV / Excel
         </button>
         <button onclick="openCreateModal()" class="flex-1 sm:flex-none bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-xl transition shadow-sm text-center">
           + Новый гость
@@ -671,6 +671,7 @@
       }
     }
 
+    // Исправленная функция экспорта для Excel
     function exportToCSV() {
       if (currentSession.role !== 'GENERAL_MANAGER') {
         return alert('Экспорт доступен только генеральному директору');
@@ -678,17 +679,44 @@
 
       if (!allGuests.length) return alert('Нет данных для экспорта');
 
-      let csv = 'ФИО,Телефон,Дата Рождения,Категория,Предпочтения,Важное,Визитов Всего\n';
+      // Используем точку с запятой (;) — стандарт для русскоязычной локали Excel
+      const delimiter = ';';
+      const headers = ['ФИО', 'Телефон', 'Дата Рождения', 'Категория', 'Предпочтения', 'Важная информация', 'Всего визитов'];
+      
+      const escapeField = (val) => {
+        if (val === null || val === undefined) return '""';
+        // Экранируем двойные кавычки и удаляем переносы строк, чтобы не ломать ячейки таблицы
+        const safeVal = String(val).replace(/"/g, '""').replace(/\r?\n/g, ' ');
+        return `"${safeVal}"`;
+      };
+
+      // \uFEFF — UTF-8 BOM для корректного отображения кириллицы
+      let csvContent = '\uFEFF'; 
+      csvContent += headers.map(escapeField).join(delimiter) + '\r\n';
+
       allGuests.forEach(g => {
         const visitsCount = g.visit_history ? g.visit_history.length : 0;
-        csv += `"${g.full_name}","${g.phone}","${g.birth_date || ''}","${g.category}","${g.preferences || ''}","${g.important_info || ''}",${visitsCount}\n`;
+        const row = [
+          g.full_name,
+          g.phone,
+          g.birth_date || '',
+          g.category || '',
+          g.preferences || '',
+          g.important_info || '',
+          visitsCount
+        ];
+        csvContent += row.map(escapeField).join(delimiter) + '\r\n';
       });
 
-      const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `guests_export_${new Date().toISOString().slice(0,10)}.csv`;
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `guests_export_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     }
 
     checkSavedSession();
