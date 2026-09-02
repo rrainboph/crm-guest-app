@@ -2,12 +2,19 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>CRM Гостей — Сетевое управление</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    /* Плавная прокрутка и кастомный скроллбар */
+    html { -webkit-tap-highlight-color: transparent; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+  </style>
 </head>
-<body class="bg-slate-100 min-h-screen text-slate-800 p-4 sm:p-6">
+<body class="bg-slate-100 min-h-screen text-slate-800 p-3 sm:p-5 md:p-8">
   <script>
     const SUPABASE_URL = 'https://dvuhuaqfgzcqoqriycyq.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_zGFa4777lnuhoIB1C20eIA_WTj6DOIW';
@@ -27,19 +34,19 @@
 
   <!-- Экран Входа (Авторизация по Ключу) -->
   <div id="auth-screen" class="fixed inset-0 bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-4 z-50">
-    <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center space-y-5">
-      <div class="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center mx-auto text-2xl font-bold">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 sm:p-8 text-center space-y-5">
+      <div class="w-14 h-14 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto text-3xl font-bold shadow-inner">
         🔑
       </div>
       <div>
-        <h2 class="text-xl font-bold text-slate-900">Авторизация CRM</h2>
-        <p class="text-xs text-slate-500 mt-1">Вводите ваш персональный ключ доступа</p>
+        <h2 class="text-xl sm:text-2xl font-bold text-slate-900">Авторизация CRM</h2>
+        <p class="text-xs sm:text-sm text-slate-500 mt-1">Введите персональный ключ доступа</p>
       </div>
       <form onsubmit="handleAuth(event)" class="space-y-4">
         <input type="password" id="access-key-input" required placeholder="Введите ключ..." 
-          class="w-full text-center tracking-widest text-lg px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
-        <p id="auth-error" class="text-xs text-rose-600 hidden font-medium">Неверный ключ доступа</p>
-        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition shadow-md">
+          class="w-full text-center tracking-widest text-base sm:text-lg px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm">
+        <p id="auth-error" class="text-xs sm:text-sm text-rose-600 hidden font-medium">Неверный ключ доступа</p>
+        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-semibold py-3.5 rounded-xl transition shadow-md text-sm sm:text-base">
           Войти в систему
         </button>
       </form>
@@ -47,100 +54,103 @@
   </div>
 
   <!-- Основной интерфейс CRM -->
-  <div id="app-screen" class="hidden max-w-5xl mx-auto space-y-6">
+  <div id="app-screen" class="hidden max-w-6xl mx-auto space-y-4 sm:space-y-6">
     <!-- Шапка -->
-    <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-xl shadow-sm border border-slate-200 gap-4">
-      <div>
-        <div class="flex items-center gap-2">
-          <h1 class="text-xl font-bold text-slate-900">Ресторанная CRM</h1>
-          <span id="user-role-badge" class="px-2 py-0.5 text-[10px] font-bold rounded bg-indigo-100 text-indigo-800"></span>
-        </div>
-        <div class="flex items-center gap-2 mt-1">
-          <span class="text-xs text-slate-500 font-medium">📍 Филиал:</span>
-          <select id="branch-select" onchange="changeBranch()" class="text-xs font-semibold bg-slate-100 border border-slate-200 rounded-md px-2 py-1 text-slate-700 focus:outline-none">
-            <option value="ALL">🌐 Все филиалы (Вся сеть)</option>
-            <option value="11111111-1111-1111-1111-111111111111">ул. Куйбышева</option>
-            <option value="22222222-2222-2222-2222-222222222222">пр. Чуй</option>
-            <option value="33333333-3333-3333-3333-333333333333">пр. Манаса</option>
-          </select>
+    <header class="flex flex-col lg:flex-row justify-between items-stretch lg:items-center bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200/80 gap-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between lg:justify-start gap-2 sm:gap-4">
+        <div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <h1 class="text-lg sm:text-xl font-bold text-slate-900">Ресторанная CRM</h1>
+            <span id="user-role-badge" class="px-2.5 py-1 text-[11px] font-bold rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100"></span>
+          </div>
+          <div class="flex items-center gap-2 mt-1.5">
+            <span class="text-xs text-slate-500 font-medium">📍 Филиал:</span>
+            <select id="branch-select" onchange="changeBranch()" class="text-xs sm:text-sm font-semibold bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+              <option value="ALL">🌐 Все филиалы (Вся сеть)</option>
+              <option value="11111111-1111-1111-1111-111111111111">ул. Куйбышева</option>
+              <option value="22222222-2222-2222-2222-222222222222">пр. Чуй</option>
+              <option value="33333333-3333-3333-3333-333333333333">пр. Манаса</option>
+            </select>
+          </div>
         </div>
       </div>
-      <div class="flex items-center gap-2 w-full sm:w-auto">
-        <button id="export-btn" onclick="exportToCSV()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-3 py-2 rounded-lg transition border border-slate-200 flex items-center justify-center gap-1">
-          📥 Экспорт CSV
+
+      <div class="flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap">
+        <button id="export-btn" onclick="exportToCSV()" class="flex-1 sm:flex-none bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs sm:text-sm font-semibold px-3 py-2.5 rounded-xl transition border border-slate-200 flex items-center justify-center gap-1.5">
+          📥 <span class="hidden sm:inline">Экспорт</span> CSV
         </button>
-        <button onclick="openCreateModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition shadow-sm text-center">
+        <button onclick="openCreateModal()" class="flex-1 sm:flex-none bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-xl transition shadow-sm text-center">
           + Новый гость
         </button>
-        <button onclick="logout()" title="Выйти из системы" class="bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold px-3 py-2 rounded-lg transition">
+        <button onclick="logout()" title="Выйти из системы" class="bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs sm:text-sm font-bold px-3 py-2.5 rounded-xl transition">
           🚪 Выйти
         </button>
       </div>
     </header>
 
     <!-- Сводка Сегодня -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      <div onclick="setFilter('BIRTHDAYS')" id="card-birthdays" class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 cursor-pointer hover:border-amber-400 transition">
-        <p class="text-xs text-slate-500 font-medium">🎂 ДР в скором времени (7 дн)</p>
-        <p id="stat-birthdays" class="text-2xl font-bold text-amber-600 mt-1">0</p>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+      <div onclick="setFilter('BIRTHDAYS')" id="card-birthdays" class="bg-white p-3.5 sm:p-4 rounded-xl shadow-sm border border-slate-200/80 cursor-pointer hover:border-amber-400 transition active:scale-[0.98]">
+        <p class="text-[11px] sm:text-xs text-slate-500 font-medium">🎂 ДР скором времени (7дн)</p>
+        <p id="stat-birthdays" class="text-xl sm:text-2xl font-bold text-amber-600 mt-1">0</p>
       </div>
-      <div onclick="setFilter('VIP')" id="card-vip" class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 cursor-pointer hover:border-indigo-400 transition">
-        <p class="text-xs text-slate-500 font-medium">⭐ VIP-гости</p>
-        <p id="stat-vip" class="text-2xl font-bold text-indigo-600 mt-1">0</p>
+      <div onclick="setFilter('VIP')" id="card-vip" class="bg-white p-3.5 sm:p-4 rounded-xl shadow-sm border border-slate-200/80 cursor-pointer hover:border-indigo-400 transition active:scale-[0.98]">
+        <p class="text-[11px] sm:text-xs text-slate-500 font-medium">⭐ VIP-гости</p>
+        <p id="stat-vip" class="text-xl sm:text-2xl font-bold text-indigo-600 mt-1">0</p>
       </div>
-      <div onclick="setFilter('ALL')" id="card-total" class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 cursor-pointer hover:border-emerald-400 border-2 border-emerald-500 transition">
-        <p class="text-xs text-slate-500 font-medium">✨ Всего гостей</p>
-        <p id="stat-total" class="text-2xl font-bold text-emerald-600 mt-1">0</p>
+      <div onclick="setFilter('ALL')" id="card-total" class="bg-white p-3.5 sm:p-4 rounded-xl shadow-sm border border-slate-200/80 cursor-pointer hover:border-emerald-400 border-2 border-emerald-500 transition active:scale-[0.98]">
+        <p class="text-[11px] sm:text-xs text-slate-500 font-medium">✨ Всего гостей</p>
+        <p id="stat-total" class="text-xl sm:text-2xl font-bold text-emerald-600 mt-1">0</p>
       </div>
-      <div onclick="setFilter('INACTIVE')" id="card-inactive" class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 cursor-pointer hover:border-rose-400 transition">
-        <p class="text-xs text-slate-500 font-medium">⚠️ Не были > 30 дней</p>
-        <p id="stat-inactive" class="text-2xl font-bold text-rose-600 mt-1">0</p>
+      <div onclick="setFilter('INACTIVE')" id="card-inactive" class="bg-white p-3.5 sm:p-4 rounded-xl shadow-sm border border-slate-200/80 cursor-pointer hover:border-rose-400 transition active:scale-[0.98]">
+        <p class="text-[11px] sm:text-xs text-slate-500 font-medium">⚠️ Не были > 30 дней</p>
+        <p id="stat-inactive" class="text-xl sm:text-2xl font-bold text-rose-600 mt-1">0</p>
       </div>
     </div>
 
     <!-- Фильтр и Поиск -->
-    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row gap-3 items-center justify-between">
-      <input type="text" id="search" oninput="applyFilters()" placeholder="🔍 Поиск гостя по имени или номеру телефона..." 
-        class="w-full sm:w-2/3 px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+    <div class="bg-white p-3.5 sm:p-4 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+      <input type="text" id="search" oninput="applyFilters()" placeholder="🔍 Поиск по имени или телефону..." 
+        class="w-full sm:w-2/3 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base sm:text-sm">
       
-      <div id="active-filter-badge" class="text-xs font-semibold text-slate-500 bg-slate-100 px-3 py-2 rounded-lg w-full sm:w-auto text-center">
-        Режим: <span id="filter-name-text" class="text-slate-800">Все гости</span>
+      <div id="active-filter-badge" class="text-xs font-semibold text-slate-500 bg-slate-100 px-3 py-2.5 rounded-xl text-center shrink-0">
+        Режим: <span id="filter-name-text" class="text-slate-800 font-bold">Все гости</span>
       </div>
     </div>
 
     <!-- Список гостей -->
     <div id="guests-list" class="space-y-4">
-      <p class="text-center text-slate-400 py-8">Загрузка данных...</p>
+      <p class="text-center text-slate-400 py-12 text-sm">Загрузка данных...</p>
     </div>
   </div>
 
   <!-- Модальное окно создания / редактирования гостя -->
-  <div id="guest-modal" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-    <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 space-y-4">
-      <div class="flex justify-between items-center border-b pb-3">
-        <h3 id="modal-title" class="text-lg font-bold text-slate-900">Новый гость</h3>
-        <button onclick="toggleModal(false)" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+  <div id="guest-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-5 sm:p-6 space-y-4">
+      <div class="flex justify-between items-center border-b pb-3 sticky top-0 bg-white z-10">
+        <h3 id="modal-title" class="text-base sm:text-lg font-bold text-slate-900">Новый гость</h3>
+        <button onclick="toggleModal(false)" class="text-slate-400 hover:text-slate-600 text-2xl font-bold p-1">&times;</button>
       </div>
-      <form id="add-guest-form" onsubmit="saveGuest(event)" class="space-y-3">
+      <form id="add-guest-form" onsubmit="saveGuest(event)" class="space-y-3.5">
         <input type="hidden" id="edit_guest_id">
 
         <div>
-          <label class="block text-xs font-medium text-slate-700 mb-1">ФИО *</label>
-          <input type="text" id="full_name" required placeholder="Анна Ким" class="w-full px-3 py-2 border rounded-lg text-sm">
+          <label class="block text-xs font-semibold text-slate-700 mb-1">ФИО *</label>
+          <input type="text" id="full_name" required placeholder="Анна Ким" class="w-full px-3.5 py-2.5 border rounded-xl text-base sm:text-sm focus:ring-2 focus:ring-indigo-500">
         </div>
-        <div class="grid grid-cols-2 gap-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-medium text-slate-700 mb-1">Телефон *</label>
-            <input type="text" id="phone" required placeholder="+996..." class="w-full px-3 py-2 border rounded-lg text-sm">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Телефон *</label>
+            <input type="text" id="phone" required placeholder="+996..." class="w-full px-3.5 py-2.5 border rounded-xl text-base sm:text-sm focus:ring-2 focus:ring-indigo-500">
           </div>
           <div>
-            <label class="block text-xs font-medium text-slate-700 mb-1">Дата рождения</label>
-            <input type="date" id="birth_date" class="w-full px-3 py-2 border rounded-lg text-sm">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Дата рождения</label>
+            <input type="date" id="birth_date" class="w-full px-3.5 py-2.5 border rounded-xl text-base sm:text-sm focus:ring-2 focus:ring-indigo-500">
           </div>
         </div>
         <div>
-          <label class="block text-xs font-medium text-slate-700 mb-1">Категория</label>
-          <select id="category" class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Категория</label>
+          <select id="category" class="w-full px-3.5 py-2.5 border rounded-xl text-base sm:text-sm bg-white focus:ring-2 focus:ring-indigo-500">
             <option value="NEW">Новый</option>
             <option value="REGULAR">Постоянный</option>
             <option value="VIP">VIP</option>
@@ -148,31 +158,31 @@
           </select>
         </div>
         <div>
-          <label class="block text-xs font-medium text-slate-700 mb-1">Предпочтения (любимые блюда, стол)</label>
-          <input type="text" id="preferences" placeholder="Любит кукси, стол у окна" class="w-full px-3 py-2 border rounded-lg text-sm">
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Предпочтения (любимые блюда, стол)</label>
+          <input type="text" id="preferences" placeholder="Любит кукси, стол у окна" class="w-full px-3.5 py-2.5 border rounded-xl text-base sm:text-sm focus:ring-2 focus:ring-indigo-500">
         </div>
         <div>
-          <label class="block text-xs font-medium text-slate-700 mb-1">Важная информация (аллергии, дети)</label>
-          <input type="text" id="important_info" placeholder="Без острого соуса ребенку" class="w-full px-3 py-2 border rounded-lg text-sm">
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Важная информация (аллергии, дети)</label>
+          <input type="text" id="important_info" placeholder="Без острого соуса ребенку" class="w-full px-3.5 py-2.5 border rounded-xl text-base sm:text-sm focus:ring-2 focus:ring-indigo-500">
         </div>
         <div class="flex justify-end gap-2 pt-3 border-t">
-          <button type="button" onclick="toggleModal(false)" class="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Отмена</button>
-          <button type="submit" class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg">Сохранить</button>
+          <button type="button" onclick="toggleModal(false)" class="px-4 py-2.5 text-xs sm:text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">Отмена</button>
+          <button type="submit" class="px-5 py-2.5 text-xs sm:text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition shadow-sm">Сохранить</button>
         </div>
       </form>
     </div>
   </div>
 
   <!-- Модальное окно управления визитами -->
-  <div id="visits-modal" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-    <div class="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
-      <div class="flex justify-between items-center border-b pb-3">
-        <h3 class="text-lg font-bold text-slate-900">История визитов</h3>
-        <button onclick="toggleVisitsModal(false)" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+  <div id="visits-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-5 sm:p-6 space-y-4">
+      <div class="flex justify-between items-center border-b pb-3 sticky top-0 bg-white z-10">
+        <h3 class="text-base sm:text-lg font-bold text-slate-900">История визитов</h3>
+        <button onclick="toggleVisitsModal(false)" class="text-slate-400 hover:text-slate-600 text-2xl font-bold p-1">&times;</button>
       </div>
       <div id="visits-modal-list" class="space-y-2 max-h-60 overflow-y-auto pr-1"></div>
       <div class="flex justify-end pt-3 border-t">
-        <button type="button" onclick="toggleVisitsModal(false)" class="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200">Закрыть</button>
+        <button type="button" onclick="toggleVisitsModal(false)" class="px-4 py-2.5 text-xs sm:text-sm bg-slate-100 text-slate-700 font-semibold rounded-xl hover:bg-slate-200">Закрыть</button>
       </div>
     </div>
   </div>
@@ -244,7 +254,7 @@
       const { data: guests, error } = await query.order('created_at', { ascending: false });
 
       if (error) {
-        document.getElementById('guests-list').innerHTML = `<div class="p-4 bg-red-50 text-red-600 rounded-xl">Ошибка: ${error.message}</div>`;
+        document.getElementById('guests-list').innerHTML = `<div class="p-4 bg-red-50 text-red-600 rounded-xl text-xs sm:text-sm">Ошибка: ${error.message}</div>`;
         return;
       }
       allGuests = guests || [];
@@ -340,7 +350,7 @@
     function renderGuests(guests) {
       const container = document.getElementById('guests-list');
       if (!guests.length) {
-        container.innerHTML = `<div class="p-8 bg-white rounded-xl text-center text-slate-400">Гости не найдены</div>`;
+        container.innerHTML = `<div class="p-8 bg-white rounded-2xl text-center text-slate-400 text-sm">Гости не найдены</div>`;
         return;
       }
 
@@ -358,73 +368,78 @@
         const missingPreferences = !guest.preferences ? '<span class="text-amber-600 text-xs font-semibold block mt-0.5">⚠️ Укажите предпочтения!</span>' : '';
 
         return `
-        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4">
-          <div class="flex justify-between items-start border-b pb-3 border-slate-100">
+        <div class="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200/80 space-y-4">
+          <!-- Верхняя панель карточки -->
+          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b pb-3 border-slate-100">
             <div>
-              <div class="flex items-center gap-2">
-                <h2 class="text-lg font-bold text-slate-900">${guest.full_name}</h2>
-                <span class="px-2.5 py-0.5 rounded text-xs font-bold ${getCategoryBadge(guest.category)}">
+              <div class="flex items-center gap-2 flex-wrap">
+                <h2 class="text-base sm:text-lg font-bold text-slate-900">${guest.full_name}</h2>
+                <span class="px-2 py-0.5 rounded text-[11px] font-bold ${getCategoryBadge(guest.category)}">
                   ${guest.category}
                 </span>
                 ${birthdayWarning}
               </div>
-              <p class="text-sm text-slate-500 mt-0.5">📞 ${guest.phone}</p>
+              <p class="text-xs sm:text-sm text-slate-500 mt-0.5 font-medium">📞 ${guest.phone}</p>
             </div>
-            <div class="flex items-center gap-2">
-              <button onclick="openEditModal('${guest.id}')" title="Редактировать данные" class="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition">
-                ✏️ Редактировать
+            
+            <!-- Кнопки действий -->
+            <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap w-full sm:w-auto pt-1 sm:pt-0 border-t sm:border-0 border-slate-100">
+              <button onclick="openEditModal('${guest.id}')" title="Редактировать данные" class="flex-1 sm:flex-none bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition text-center">
+                ✏️ <span class="inline sm:hidden lg:inline">Изменить</span>
               </button>
-              <button onclick="openVisitsModal('${guest.id}')" title="Управление визитами" class="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition">
-                ⚙️ Визиты
+              <button onclick="openVisitsModal('${guest.id}')" title="Управление визитами" class="flex-1 sm:flex-none bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition text-center">
+                ⚙️ <span class="inline sm:hidden lg:inline">Визиты</span>
               </button>
-              <button onclick="recordVisit('${guest.id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition shadow-sm">
-                + Отметить визит
+              <button onclick="recordVisit('${guest.id}')" class="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition shadow-sm text-center">
+                + Визит
               </button>
-              <button onclick="deleteGuest('${guest.id}')" title="Удалить карточку гостя" class="bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold px-2 py-1.5 rounded-lg transition">
+              <button onclick="deleteGuest('${guest.id}')" title="Удалить карточку гостя" class="bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold px-2.5 py-1.5 rounded-lg transition">
                 🗑️
               </button>
             </div>
           </div>
 
-          <div class="grid sm:grid-cols-3 gap-3 text-sm">
-            <div>
-              <span class="font-medium text-slate-500 text-xs block">🎂 День рождения</span>
-              <p class="text-slate-800 font-medium">${formatBirthDate(guest.birth_date)}</p>
+          <!-- Сетка информации о госте -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs sm:text-sm">
+            <div class="bg-slate-50/50 p-2.5 rounded-xl sm:bg-transparent sm:p-0">
+              <span class="font-medium text-slate-500 text-[11px] block">🎂 День рождения</span>
+              <p class="text-slate-800 font-semibold mt-0.5">${formatBirthDate(guest.birth_date)}</p>
             </div>
-            <div>
-              <span class="font-medium text-slate-500 text-xs block">📅 Последний визит</span>
-              <p class="text-slate-800 font-medium">${lastVisitStr} <button onclick="openVisitsModal('${guest.id}')" class="text-xs text-indigo-600 underline font-normal ml-1">(${visits.length} всего)</button></p>
+            <div class="bg-slate-50/50 p-2.5 rounded-xl sm:bg-transparent sm:p-0">
+              <span class="font-medium text-slate-500 text-[11px] block">📅 Последний визит</span>
+              <p class="text-slate-800 font-semibold mt-0.5">${lastVisitStr} <button onclick="openVisitsModal('${guest.id}')" class="text-xs text-indigo-600 underline font-normal ml-1">(${visits.length} всего)</button></p>
             </div>
-            <div>
-              <span class="font-medium text-slate-700 text-xs block">❤️ Предпочтения</span>
-              <p class="text-slate-800">${guest.preferences || 'Не указаны'}</p>
+            <div class="bg-slate-50/50 p-2.5 rounded-xl sm:bg-transparent sm:p-0">
+              <span class="font-medium text-slate-500 text-[11px] block">❤️ Предпочтения</span>
+              <p class="text-slate-800 mt-0.5">${guest.preferences || 'Не указаны'}</p>
               ${missingPreferences}
             </div>
           </div>
 
           ${guest.important_info ? `
-            <div class="bg-amber-50 p-3 rounded-lg text-xs text-amber-900 border border-amber-200/60">
-              <strong>💬 Важная информация:</strong> ${guest.important_info}
+            <div class="bg-amber-50 p-3 rounded-xl text-xs text-amber-900 border border-amber-200/60 leading-relaxed">
+              <strong>💬 Важное:</strong> ${guest.important_info}
             </div>
           ` : ''}
 
+          <!-- Заметки -->
           <div class="pt-2 border-t border-slate-100 space-y-2">
-            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block">Заметки управляющих</span>
+            <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Заметки управляющих</span>
             
             <div class="space-y-1.5">
               ${comments.length === 0 ? '<p class="text-xs text-slate-400 italic">Комментариев пока нет</p>' : ''}
               ${comments.map(c => `
-                <div class="bg-slate-50 p-2.5 rounded-lg text-xs flex justify-between items-start border border-slate-100">
-                  <p class="text-slate-700">${c.comment}</p>
-                  <span class="text-[10px] text-slate-400 shrink-0 ml-2">${new Date(c.created_at).toLocaleDateString('ru-RU')}</span>
+                <div class="bg-slate-50 p-2.5 rounded-xl text-xs flex justify-between items-start border border-slate-100">
+                  <p class="text-slate-700 leading-relaxed">${c.comment}</p>
+                  <span class="text-[10px] text-slate-400 shrink-0 ml-2 font-medium">${new Date(c.created_at).toLocaleDateString('ru-RU')}</span>
                 </div>
               `).join('')}
             </div>
 
             <div class="flex gap-2 pt-1">
               <input type="text" id="comment-input-${guest.id}" placeholder="Добавить заметку о госте..." 
-                class="flex-1 text-xs px-3 py-1.5 bg-slate-50 border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500">
-              <button onclick="addComment('${guest.id}')" class="bg-slate-800 hover:bg-slate-900 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition">
+                class="flex-1 text-base sm:text-xs px-3 py-2 sm:py-1.5 bg-slate-50 border rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500">
+              <button onclick="addComment('${guest.id}')" class="bg-slate-800 hover:bg-slate-900 text-white text-xs px-3.5 py-2 sm:py-1.5 rounded-xl font-medium transition shrink-0">
                 Сохранить
               </button>
             </div>
@@ -489,11 +504,9 @@
         return;
       }
 
-      // 1. Очищаем связанные данные
       await supabaseClient.from('visit_history').delete().eq('guest_id', guestId);
       await supabaseClient.from('guest_comments').delete().eq('guest_id', guestId);
 
-      // 2. Удаляем самого гостя
       const { error } = await supabaseClient.from('guests').delete().eq('id', guestId);
 
       if (error) {
@@ -537,11 +550,11 @@
         container.innerHTML = '<p class="text-slate-400 text-xs text-center py-4">У гостя пока нет зафиксированных визитов</p>';
       } else {
         container.innerHTML = visits.map(v => `
-          <div class="flex justify-between items-center bg-slate-50 p-2.5 rounded-lg text-xs border border-slate-200">
+          <div class="flex justify-between items-center bg-slate-50 p-2.5 rounded-xl text-xs border border-slate-200">
             <div>
               <span class="font-medium text-slate-800">🗓️ ${new Date(v.visit_date).toLocaleString('ru-RU')}</span>
             </div>
-            <button onclick="deleteVisit('${v.id}', '${guestId}')" class="text-rose-600 hover:text-rose-800 font-bold px-2 py-1 rounded bg-rose-50 hover:bg-rose-100 transition">
+            <button onclick="deleteVisit('${v.id}', '${guestId}')" class="text-rose-600 hover:text-rose-800 font-bold px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 transition">
               Удалить
             </button>
           </div>
