@@ -43,10 +43,13 @@ function initApp() {
   if (currentSession.role === 'BRANCH_MANAGER') {
     branchSelect.value = currentSession.branchId;
     branchSelect.disabled = true;
-    exportBtn.classList.add('hidden');
   } else {
     branchSelect.value = 'ALL';
     branchSelect.disabled = false;
+  }
+
+  // Показываем кнопку экспорта для всех пользователей
+  if (exportBtn) {
     exportBtn.classList.remove('hidden');
   }
 
@@ -239,23 +242,19 @@ function renderGuests(guests) {
         
         <div class="space-y-1.5">
           ${comments.length === 0 ? '<p class="text-xs text-slate-400 italic">Комментариев пока нет</p>' : ''}
-          ${comments.map(c => {
-            // Безопасное экранирование текста заметки для атрибута onclick
-            const safeText = (c.comment || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-            return `
-              <div class="bg-slate-50 p-2.5 rounded-xl text-xs flex justify-between items-center border border-slate-100 gap-2">
-                <p class="text-slate-700 leading-relaxed flex-1">${c.comment}</p>
-                
-                <div class="flex items-center gap-1 shrink-0">
-                  <span class="text-[10px] text-slate-400 font-medium mr-1">
-                    ${new Date(c.created_at).toLocaleDateString('ru-RU')}
-                  </span>
-                  <button onclick="editComment('${c.id}', '${safeText}')" title="Редактировать заметку" class="p-1 hover:bg-slate-200 rounded text-slate-600 transition">✏️</button>
-                  <button onclick="deleteComment('${c.id}')" title="Удалить заметку" class="p-1 hover:bg-rose-100 rounded text-rose-600 transition">🗑️</button>
-                </div>
+          ${comments.map(c => `
+            <div class="bg-slate-50 p-2.5 rounded-xl text-xs flex justify-between items-center border border-slate-100 gap-2">
+              <p class="text-slate-700 leading-relaxed flex-1">${c.comment}</p>
+              
+              <div class="flex items-center gap-1 shrink-0">
+                <span class="text-[10px] text-slate-400 font-medium mr-1">
+                  ${new Date(c.created_at).toLocaleDateString('ru-RU')}
+                </span>
+                <button onclick="editComment('${c.id}')" title="Редактировать заметку" class="p-1 hover:bg-slate-200 rounded text-slate-600 transition">✏️</button>
+                <button onclick="deleteComment('${c.id}')" title="Удалить заметку" class="p-1 hover:bg-rose-100 rounded text-rose-600 transition">🗑️</button>
               </div>
-            `;
-          }).join('')}
+            </div>
+          `).join('')}
         </div>
 
         <div class="flex gap-2 pt-1">
@@ -297,7 +296,14 @@ async function addComment(guestId) {
   else loadGuests();
 }
 
-async function editComment(commentId, currentText) {
+async function editComment(commentId) {
+  // Находим существующую заметку в локальных данных
+  let currentText = '';
+  allGuests.forEach(g => {
+    const found = (g.guest_comments || []).find(c => c.id === commentId);
+    if (found) currentText = found.comment;
+  });
+
   const newText = prompt('Редактировать заметку:', currentText);
   if (newText === null) return;
   if (!newText.trim()) return alert('Заметка не может быть пустой');
@@ -467,7 +473,7 @@ async function deleteVisit(visitId, guestId) {
   }
 }
 
-// --- Экспорт в CSV ---
+// --- Экспорт в Excel / CSV ---
 function exportToCSV() {
   if (!allGuests.length) {
     alert('Нет данных для экспорта');
