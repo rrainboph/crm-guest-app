@@ -9,12 +9,12 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Ваши пароли и роли для входа
 const ACCESS_KEYS = {
-  'admin123': { 
-    name: 'Главный управляющий', 
+  '7777': { 
+    name: 'Генеральный директор', 
     role: 'ADMIN' 
   },
-  'branch1': { 
-    name: 'Филиал 1', 
+  '1111': { 
+    name: 'Куйбышева', 
     role: 'BRANCH_MANAGER', 
     branchId: '11111111-1111-1111-1111-111111111111' 
   }
@@ -82,7 +82,6 @@ function initApp() {
     }
   }
 
-  // Показываем кнопку экспорта
   if (exportBtn) {
     exportBtn.classList.remove('hidden');
   }
