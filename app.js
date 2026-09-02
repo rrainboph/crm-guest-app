@@ -1,18 +1,48 @@
+// ==========================================
+// 1. НАСТРОЙКИ И КЛЮЧИ ДОСТУПА
+// ==========================================
+const SUPABASE_URL = 'https://ваш-проект.supabase.co'; // Замени на свой URL Supabase
+const SUPABASE_ANON_KEY = 'ваш-anon-ключ'; // Замени на свой ANON KEY Supabase
+
+// Инициализация Supabase
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Ваши пароли и роли для входа
+const ACCESS_KEYS = {
+  'admin123': { 
+    name: 'Главный управляющий', 
+    role: 'ADMIN' 
+  },
+  'branch1': { 
+    name: 'Филиал 1', 
+    role: 'BRANCH_MANAGER', 
+    branchId: '11111111-1111-1111-1111-111111111111' 
+  }
+};
+
+// ==========================================
+// 2. ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
+// ==========================================
 let currentSession = null;
 let allGuests = [];
 let currentFilterMode = 'ALL';
 
-// --- Авторизация и Сессии ---
+// ==========================================
+// 3. АВТОРИЗАЦИЯ И СЕССИИ
+// ==========================================
 function handleAuth(e) {
   e.preventDefault();
-  const key = document.getElementById('access-key-input').value.trim();
+  const keyInput = document.getElementById('access-key-input');
+  if (!keyInput) return;
+  const key = keyInput.value.trim();
   
   if (ACCESS_KEYS[key]) {
     currentSession = ACCESS_KEYS[key];
     localStorage.setItem('crm_access_key', key);
     initApp();
   } else {
-    document.getElementById('auth-error').classList.remove('hidden');
+    const errEl = document.getElementById('auth-error');
+    if (errEl) errEl.classList.remove('hidden');
   }
 }
 
@@ -35,20 +65,24 @@ function logout() {
 function initApp() {
   document.getElementById('auth-screen').classList.add('hidden');
   document.getElementById('app-screen').classList.remove('hidden');
-  document.getElementById('user-role-badge').innerText = currentSession.name;
+  
+  const roleBadge = document.getElementById('user-role-badge');
+  if (roleBadge) roleBadge.innerText = currentSession.name;
 
   const branchSelect = document.getElementById('branch-select');
   const exportBtn = document.getElementById('export-btn');
 
-  if (currentSession.role === 'BRANCH_MANAGER') {
-    branchSelect.value = currentSession.branchId;
-    branchSelect.disabled = true;
-  } else {
-    branchSelect.value = 'ALL';
-    branchSelect.disabled = false;
+  if (branchSelect) {
+    if (currentSession.role === 'BRANCH_MANAGER') {
+      branchSelect.value = currentSession.branchId;
+      branchSelect.disabled = true;
+    } else {
+      branchSelect.value = 'ALL';
+      branchSelect.disabled = false;
+    }
   }
 
-  // Показываем кнопку экспорта для всех пользователей
+  // Показываем кнопку экспорта
   if (exportBtn) {
     exportBtn.classList.remove('hidden');
   }
@@ -56,9 +90,12 @@ function initApp() {
   loadGuests();
 }
 
-// --- Загрузка данных и статистика ---
+// ==========================================
+// 4. ЗАГРУЗКА ДАННЫХ И СТАТИСТИКА
+// ==========================================
 async function loadGuests() {
-  const branchId = document.getElementById('branch-select').value;
+  const branchSelect = document.getElementById('branch-select');
+  const branchId = branchSelect ? branchSelect.value : 'ALL';
   
   let query = supabaseClient.from('guests').select('*, guest_comments(*), visit_history(*)');
   
@@ -69,9 +106,13 @@ async function loadGuests() {
   const { data: guests, error } = await query.order('created_at', { ascending: false });
 
   if (error) {
-    document.getElementById('guests-list').innerHTML = `<div class="p-4 bg-red-50 text-red-600 rounded-xl text-xs sm:text-sm">Ошибка: ${error.message}</div>`;
+    document.getElementById('guests-list').innerHTML = `
+      <div class="p-4 bg-red-50 text-red-600 rounded-xl text-xs sm:text-sm">
+        Ошибка загрузки данных: ${error.message}
+      </div>`;
     return;
   }
+
   allGuests = guests || [];
   updateStats();
   applyFilters();
@@ -97,8 +138,13 @@ function isBirthdaySoon(dateStr, daysAhead = 7) {
 }
 
 function updateStats() {
-  document.getElementById('stat-total').innerText = allGuests.length;
-  document.getElementById('stat-vip').innerText = allGuests.filter(g => g.category === 'VIP').length;
+  const totalEl = document.getElementById('stat-total');
+  const vipEl = document.getElementById('stat-vip');
+  const inactiveEl = document.getElementById('stat-inactive');
+  const bdayEl = document.getElementById('stat-birthdays');
+
+  if (totalEl) totalEl.innerText = allGuests.length;
+  if (vipEl) vipEl.innerText = allGuests.filter(g => g.category === 'VIP').length;
   
   const now = new Date();
   const thirtyDaysAgo = new Date(now.setDate(now.getDate() - 30));
@@ -108,46 +154,51 @@ function updateStats() {
     const lastVisit = new Date(Math.max(...g.visit_history.map(v => new Date(v.visit_date))));
     return lastVisit < thirtyDaysAgo;
   }).length;
-  document.getElementById('stat-inactive').innerText = inactiveCount;
+
+  if (inactiveEl) inactiveEl.innerText = inactiveCount;
 
   const upcomingBirthdays = allGuests.filter(g => isBirthdaySoon(g.birth_date, 7)).length;
-  document.getElementById('stat-birthdays').innerText = upcomingBirthdays;
+  if (bdayEl) bdayEl.innerText = upcomingBirthdays;
 }
 
-// --- Фильтрация и поиск ---
+// ==========================================
+// 5. ФИЛЬТРАЦИЯ И ПОИСК
+// ==========================================
 function setFilter(mode) {
   currentFilterMode = mode;
   
   ['total', 'vip', 'inactive', 'birthdays'].forEach(m => {
-    document.getElementById(`card-${m}`).classList.remove('border-2', 'border-emerald-500', 'border-indigo-500', 'border-rose-500', 'border-amber-500');
+    const card = document.getElementById(`card-${m}`);
+    if (card) card.classList.remove('border-2', 'border-emerald-500', 'border-indigo-500', 'border-rose-500', 'border-amber-500');
   });
 
   const badgeText = document.getElementById('filter-name-text');
 
   if (mode === 'VIP') {
-    document.getElementById('card-vip').classList.add('border-2', 'border-indigo-500');
-    badgeText.innerText = '⭐ VIP-гости';
+    document.getElementById('card-vip')?.classList.add('border-2', 'border-indigo-500');
+    if (badgeText) badgeText.innerText = '⭐ VIP-гости';
   } else if (mode === 'INACTIVE') {
-    document.getElementById('card-inactive').classList.add('border-2', 'border-rose-500');
-    badgeText.innerText = '⚠️ Не были > 30 дней';
+    document.getElementById('card-inactive')?.classList.add('border-2', 'border-rose-500');
+    if (badgeText) badgeText.innerText = '⚠️ Не были > 30 дней';
   } else if (mode === 'BIRTHDAYS') {
-    document.getElementById('card-birthdays').classList.add('border-2', 'border-amber-500');
-    badgeText.innerText = '🎂 ДР в ближайшие 7 дней';
+    document.getElementById('card-birthdays')?.classList.add('border-2', 'border-amber-500');
+    if (badgeText) badgeText.innerText = '🎂 ДР в ближайшие 7 дней';
   } else {
-    document.getElementById('card-total').classList.add('border-2', 'border-emerald-500');
-    badgeText.innerText = 'Все гости';
+    document.getElementById('card-total')?.classList.add('border-2', 'border-emerald-500');
+    if (badgeText) badgeText.innerText = 'Все гости';
   }
 
   applyFilters();
 }
 
 function applyFilters() {
-  const q = document.getElementById('search').value.toLowerCase();
+  const searchInput = document.getElementById('search');
+  const q = searchInput ? searchInput.value.toLowerCase() : '';
   const now = new Date();
   const thirtyDaysAgo = new Date(now.setDate(now.getDate() - 30));
 
   let filtered = allGuests.filter(g => {
-    const matchesSearch = g.full_name.toLowerCase().includes(q) || g.phone.includes(q);
+    const matchesSearch = (g.full_name || '').toLowerCase().includes(q) || (g.phone || '').includes(q);
     if (!matchesSearch) return false;
 
     if (currentFilterMode === 'VIP') return g.category === 'VIP';
@@ -163,9 +214,13 @@ function applyFilters() {
   renderGuests(filtered);
 }
 
-// --- Рендеринг карточек гостей ---
+// ==========================================
+// 6. РЕНДЕРИНГ КАРТОЧЕК И СПИСКОВ
+// ==========================================
 function renderGuests(guests) {
   const container = document.getElementById('guests-list');
+  if (!container) return;
+
   if (!guests.length) {
     container.innerHTML = `<div class="p-8 bg-white rounded-2xl text-center text-slate-400 text-sm">Гости не найдены</div>`;
     return;
@@ -236,7 +291,7 @@ function renderGuests(guests) {
         </div>
       ` : ''}
 
-      <!-- Заметки управляющих -->
+      <!-- СЕКЦИЯ ЗАМЕТОК С КНОПКАМИ -->
       <div class="pt-2 border-t border-slate-100 space-y-2">
         <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Заметки управляющих</span>
         
@@ -250,8 +305,12 @@ function renderGuests(guests) {
                 <span class="text-[10px] text-slate-400 font-medium mr-1">
                   ${new Date(c.created_at).toLocaleDateString('ru-RU')}
                 </span>
-                <button onclick="editComment('${c.id}')" title="Редактировать заметку" class="p-1 hover:bg-slate-200 rounded text-slate-600 transition">✏️</button>
-                <button onclick="deleteComment('${c.id}')" title="Удалить заметку" class="p-1 hover:bg-rose-100 rounded text-rose-600 transition">🗑️</button>
+                <button onclick="editComment('${c.id}')" title="Редактировать заметку" class="p-1 hover:bg-slate-200 rounded text-slate-600 transition">
+                  ✏️
+                </button>
+                <button onclick="deleteComment('${c.id}')" title="Удалить заметку" class="p-1 hover:bg-rose-100 rounded text-rose-600 transition">
+                  🗑️
+                </button>
               </div>
             </div>
           `).join('')}
@@ -285,9 +344,12 @@ function getCategoryBadge(cat) {
   }
 }
 
-// --- Управление заметками (CRUD) ---
+// ==========================================
+// 7. УПРАВЛЕНИЕ ЗАМЕТКАМИ (CRUD)
+// ==========================================
 async function addComment(guestId) {
   const input = document.getElementById(`comment-input-${guestId}`);
+  if (!input) return;
   const text = input.value.trim();
   if (!text) return;
 
@@ -297,7 +359,6 @@ async function addComment(guestId) {
 }
 
 async function editComment(commentId) {
-  // Находим существующую заметку в локальных данных
   let currentText = '';
   allGuests.forEach(g => {
     const found = (g.guest_comments || []).find(c => c.id === commentId);
@@ -329,19 +390,25 @@ async function deleteComment(commentId) {
   else loadGuests();
 }
 
-// --- Управление модальными окнами и гостями ---
+// ==========================================
+// 8. УПРАВЛЕНИЕ ГОСТЯМИ И МОДАЛКАМИ
+// ==========================================
 function toggleModal(show) {
-  document.getElementById('guest-modal').classList.toggle('hidden', !show);
+  document.getElementById('guest-modal')?.classList.toggle('hidden', !show);
 }
 
 function toggleVisitsModal(show) {
-  document.getElementById('visits-modal').classList.toggle('hidden', !show);
+  document.getElementById('visits-modal')?.classList.toggle('hidden', !show);
 }
 
 function openCreateModal() {
-  document.getElementById('modal-title').innerText = 'Новый гость';
-  document.getElementById('edit_guest_id').value = '';
-  document.getElementById('add-guest-form').reset();
+  const title = document.getElementById('modal-title');
+  const editId = document.getElementById('edit_guest_id');
+  const form = document.getElementById('add-guest-form');
+  
+  if (title) title.innerText = 'Новый гость';
+  if (editId) editId.value = '';
+  if (form) form.reset();
   toggleModal(true);
 }
 
@@ -413,7 +480,9 @@ async function deleteGuest(guestId) {
   }
 }
 
-// --- Управление визитами ---
+// ==========================================
+// 9. УПРАВЛЕНИЕ ВИЗИТАМИ
+// ==========================================
 async function recordVisit(guestId) {
   const guest = allGuests.find(g => g.id === guestId);
   const visits = guest?.visit_history || [];
@@ -444,6 +513,8 @@ function openVisitsModal(guestId) {
   const visits = (guest?.visit_history || []).sort((a,b) => new Date(b.visit_date) - new Date(a.visit_date));
   
   const container = document.getElementById('visits-modal-list');
+  if (!container) return;
+
   if (visits.length === 0) {
     container.innerHTML = '<p class="text-slate-400 text-xs text-center py-4">У гостя пока нет зафиксированных визитов</p>';
   } else {
@@ -473,7 +544,9 @@ async function deleteVisit(visitId, guestId) {
   }
 }
 
-// --- Экспорт в Excel / CSV ---
+// ==========================================
+// 10. ВЫГРУЗКА В EXCEL / CSV
+// ==========================================
 function exportToCSV() {
   if (!allGuests.length) {
     alert('Нет данных для экспорта');
@@ -501,7 +574,9 @@ function exportToCSV() {
   document.body.removeChild(link);
 }
 
-// --- Старт приложения ---
+// ==========================================
+// 11. ЗАПУСК ПРИ ЗАГРУЗКЕ
+// ==========================================
 document.addEventListener('DOMContentLoaded', () => {
   checkSavedSession();
 });
