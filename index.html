@@ -428,12 +428,32 @@
             
             <div class="space-y-1.5">
               ${comments.length === 0 ? '<p class="text-xs text-slate-400 italic">Комментариев пока нет</p>' : ''}
-              ${comments.map(c => `
-                <div class="bg-slate-50 p-2.5 rounded-xl text-xs flex justify-between items-start border border-slate-100">
-                  <p class="text-slate-700 leading-relaxed">${c.comment}</p>
-                  <span class="text-[10px] text-slate-400 shrink-0 ml-2 font-medium">${new Date(c.created_at).toLocaleDateString('ru-RU')}</span>
-                </div>
-              `).join('')}
+              ${comments.map(c => {
+                const safeText = (c.comment || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                return `
+                  <div class="bg-slate-50 p-2.5 rounded-xl text-xs flex justify-between items-center border border-slate-100 gap-2">
+                    <p class="text-slate-700 leading-relaxed flex-1">${c.comment}</p>
+                    
+                    <div class="flex items-center gap-1 shrink-0">
+                      <span class="text-[10px] text-slate-400 font-medium mr-1">
+                        ${new Date(c.created_at).toLocaleDateString('ru-RU')}
+                      </span>
+                      <button 
+                        onclick="editComment('${c.id}', '${safeText}')" 
+                        title="Редактировать" 
+                        class="p-1 hover:bg-slate-200 rounded text-slate-600 transition">
+                        ✏️
+                      </button>
+                      <button 
+                        onclick="deleteComment('${c.id}')" 
+                        title="Удалить" 
+                        class="p-1 hover:bg-rose-100 rounded text-rose-600 transition">
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
             </div>
 
             <div class="flex gap-2 pt-1">
@@ -583,6 +603,40 @@
       const { error } = await supabaseClient.from('guest_comments').insert([{ guest_id: guestId, comment: text }]);
       if (error) alert('Ошибка: ' + error.message);
       else loadGuests();
+    }
+
+    // Удаление заметки
+    async function deleteComment(commentId) {
+      if (!confirm('Удалить эту заметку?')) return;
+
+      const { error } = await supabaseClient
+        .from('guest_comments')
+        .delete()
+        .eq('id', commentId);
+
+      if (error) {
+        alert('Ошибка удаления: ' + error.message);
+      } else {
+        loadGuests();
+      }
+    }
+
+    // Редактирование заметки
+    async function editComment(commentId, currentText) {
+      const newText = prompt('Редактировать заметку:', currentText);
+      if (newText === null) return;
+      if (!newText.trim()) return alert('Заметка не может быть пустой');
+
+      const { error } = await supabaseClient
+        .from('guest_comments')
+        .update({ comment: newText.trim() })
+        .eq('id', commentId);
+
+      if (error) {
+        alert('Ошибка обновления: ' + error.message);
+      } else {
+        loadGuests();
+      }
     }
 
     async function saveGuest(e) {
