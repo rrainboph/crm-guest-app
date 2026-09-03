@@ -3,6 +3,7 @@
 let currentUser = null;
 let currentBranchId = 'ALL';
 let allGuests = [];
+let allNotes = [];
 let currentFilter = 'ALL';
 let confirmCallback = null;
 
@@ -92,7 +93,7 @@ function changeBranch() {
   loadGuests();
 }
 
-// ЗАГРУЗКА ГОСТЕЙ ИЗ SUPABASE
+// ЗАГРУЗКА ГОСТЕЙ И ЗАМЕТОК
 async function loadGuests() {
   try {
     let query = supabaseClient.from('guests').select('*').order('created_at', { ascending: false });
@@ -101,15 +102,22 @@ async function loadGuests() {
       query = query.eq('branch_id', currentBranchId);
     }
 
-    const { data, error } = await query;
-    if (error) throw error;
+    const { data: guestsData, error: guestsErr } = await query;
+    if (guestsErr) throw guestsErr;
+    allGuests = guestsData || [];
 
-    allGuests = data || [];
+    // Загружаем динамические заметки управляющего
+    const { data: notesData } = await supabaseClient
+      .from('guest_notes')
+      .select('*')
+      .order('created_at', { ascending: false });
+    allNotes = notesData || [];
+
     updateStats();
     applyFilters();
   } catch (err) {
-    console.error('Ошибка загрузки гостей:', err);
-    showToast('Ошибка загрузки данных', 'error');
+    console.error('Ошибка загрузки данных:', err);
+    showToast('Ошибка загрузки данных из БД', 'error');
   }
 }
 
@@ -180,7 +188,7 @@ function renderGuests(guests) {
 
   guests.forEach(guest => {
     const card = document.createElement('div');
-    card.className = 'bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200/80 space-y-3 hover:shadow-md transition';
+    card.className = 'bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200/80 space-y-4 hover:shadow-md transition';
 
     const categoryBadge = getCategoryBadge(guest.category);
     const formattedBirth = formatDate(guest.birth_date);
@@ -190,6 +198,9 @@ function renderGuests(guests) {
     const cleanPhone = guest.phone ? guest.phone.replace(/[^0-9]/g, '') : '';
     const waText = encodeURIComponent(`Здравствуйте, ${guest.full_name}! Приглашаем вас в наш ресторан.`);
     const waUrl = `https://wa.me/${cleanPhone}?text=${waText}`;
+
+    // Фильтруем заметки для текущего гостя
+    const guestNotesList = allNotes.filter(n => n.guest_id === guest.id);
 
     card.innerHTML = `
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -236,32 +247,38 @@ function renderGuests(guests) {
         </div>
       </div>
 
-      <!-- Отображение заметок только если они есть -->
-      ${guest.preferences ? `
-        <div class="text-xs bg-slate-50 p-2.5 rounded-xl text-slate-600 border border-slate-100 flex items-center justify-between gap-2">
-          <div class="flex items-start gap-1.5">
-            <i data-lucide="heart" class="w-3.5 h-3.5 text-indigo-500 mt-0.5 shrink-0"></i>
-            <span><strong>Предпочтения:</strong> ${escapeHtml(guest.preferences)}</span>
-          </div>
-          ${currentUser && currentUser.canManageNotes ? `
-            <button onclick="clearGuestNote('${guest.id}', 'preferences')" title="Удалить эту заметку" class="p-1 hover:bg-slate-200 text-slate-400 hover:text-rose-600 rounded-lg transition">
-              <i data-lucide="x" class="w-3.5 h-3.5"></i>
-            </button>
-          ` : ''}
-        </div>
-      ` : ''}
+      <!-- БЛОК ЗАМЕТОК УПРАВЛЯЮЩЕГО СНИЗУ КАРТОЧКИ -->
+      ${currentUser && currentUser.canManageNotes ? `
+        <div class="border-t border-slate-100 pt-3 space-y-2">
+          <p class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+            <i data-lucide="sticky-note" class="w-3.5 h-3.5 text-amber-500"></i> Заметки управляющего:
+          </p>
 
-      ${guest.important_info ? `
-        <div class="text-xs bg-amber-50 p-2.5 rounded-xl text-amber-800 border border-amber-100 flex items-center justify-between gap-2">
-          <div class="flex items-start gap-1.5">
-            <i data-lucide="alert-circle" class="w-3.5 h-3.5 text-amber-600 mt-0.5 shrink-0"></i>
-            <span><strong>Важно:</strong> ${escapeHtml(guest.important_info)}</span>
-          </div>
-          ${currentUser && currentUser.canManageNotes ? `
-            <button onclick="clearGuestNote('${guest.id}', 'important_info')" title="Удалить эту заметку" class="p-1 hover:bg-amber-100 text-amber-500 hover:text-rose-600 rounded-lg transition">
-              <i data-lucide="x" class="w-3.5 h-3.5"></i>
+          <!-- Форма добавления заметки -->
+          <div class="flex items-center gap-2">
+            <input type="text" id="note-input-${guest.id}" placeholder="Введите новую заметку..." 
+              class="flex-1 text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500">
+            <button onclick="addManagerNote('${guest.id}')" class="px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-xl transition shrink-0 flex items-center gap-1">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i> Добавить
             </button>
-          ` : ''}
+          </div>
+
+          <!-- Список добавленных заметок -->
+          <div class="space-y-1.5 max-h-40 overflow-y-auto pt-1">
+            ${guestNotesList.length === 0 ? `
+              <p class="text-[11px] text-slate-400 italic">Заметок пока нет</p>
+            ` : guestNotesList.map(n => `
+              <div class="text-xs bg-amber-50/60 border border-amber-200/60 p-2 rounded-xl flex items-center justify-between gap-2">
+                <div class="flex flex-col">
+                  <span class="text-slate-800 font-medium">${escapeHtml(n.text)}</span>
+                  <span class="text-[10px] text-slate-400 mt-0.5">${n.author || 'Управляющий'} • ${new Date(n.created_at).toLocaleDateString()}</span>
+                </div>
+                <button onclick="deleteManagerNote('${n.id}')" title="Удалить заметку" class="p-1 text-amber-700 hover:text-rose-600 rounded-lg transition">
+                  <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            `).join('')}
+          </div>
         </div>
       ` : ''}
     `;
@@ -272,6 +289,49 @@ function renderGuests(guests) {
   lucide.createIcons();
 }
 
+// ДОБАВЛЕНИЕ И УДАЛЕНИЕ ЗАМЕТОК УПРАВЛЯЮЩЕГО
+async function addManagerNote(guestId) {
+  const input = document.getElementById(`note-input-${guestId}`);
+  if (!input) return;
+
+  const text = input.value.trim();
+  if (!text) {
+    showToast('Введите текст заметки', 'error');
+    return;
+  }
+
+  try {
+    const { error } = await supabaseClient.from('guest_notes').insert([{
+      guest_id: guestId,
+      text: text,
+      author: currentUser.name
+    }]);
+
+    if (error) throw error;
+
+    showToast('Заметка добавлена', 'success');
+    loadGuests();
+  } catch (err) {
+    console.error('Ошибка добавления заметки:', err);
+    showToast('Ошибка при сохранении заметки в БД', 'error');
+  }
+}
+
+async function deleteManagerNote(noteId) {
+  showConfirm('Удалить эту заметку?', async () => {
+    try {
+      const { error } = await supabaseClient.from('guest_notes').delete().eq('id', noteId);
+      if (error) throw error;
+
+      showToast('Заметка удалена', 'success');
+      loadGuests();
+    } catch (err) {
+      console.error('Ошибка удаления заметки:', err);
+      showToast('Ошибка при удалении заметки', 'error');
+    }
+  });
+}
+
 // СТАТИСТИКА
 function updateStats() {
   document.getElementById('stat-total').innerText = allGuests.length;
@@ -280,23 +340,10 @@ function updateStats() {
   document.getElementById('stat-inactive').innerText = allGuests.filter(g => isInactive(g.last_visit_date)).length;
 }
 
-// ВИДИМОСТЬ ПОЛЕЙ ЗАМЕТОК ДЛЯ УПРАВЛЯЮЩИХ
-function updateNotesVisibility() {
-  const container = document.getElementById('notes-fields-container');
-  if (container) {
-    if (currentUser && currentUser.canManageNotes) {
-      container.classList.remove('hidden');
-    } else {
-      container.classList.add('hidden');
-    }
-  }
-}
-
 function openCreateModal() {
   document.getElementById('edit_guest_id').value = '';
   document.getElementById('add-guest-form').reset();
   document.getElementById('modal-title').innerText = 'Новый гость';
-  updateNotesVisibility();
   toggleModal(true);
 }
 
@@ -309,11 +356,8 @@ function openEditModal(guestId) {
   document.getElementById('phone').value = guest.phone || '';
   document.getElementById('birth_date').value = guest.birth_date || '';
   document.getElementById('category').value = guest.category || 'NEW';
-  document.getElementById('preferences').value = guest.preferences || '';
-  document.getElementById('important_info').value = guest.important_info || '';
 
   document.getElementById('modal-title').innerText = 'Редактировать гостя';
-  updateNotesVisibility();
   toggleModal(true);
 }
 
@@ -337,12 +381,6 @@ async function saveGuest(e) {
     branch_id
   };
 
-  // Заметки могут изменять или очищать только Управляющие
-  if (currentUser && currentUser.canManageNotes) {
-    payload.preferences = document.getElementById('preferences').value.trim();
-    payload.important_info = document.getElementById('important_info').value.trim();
-  }
-
   try {
     if (id) {
       const { error } = await supabaseClient.from('guests').update(payload).eq('id', id);
@@ -354,7 +392,6 @@ async function saveGuest(e) {
       const { data, error } = await supabaseClient.from('guests').insert([payload]).select();
       if (error) throw error;
 
-      // Автоматически фиксируем 1-й визит в таблице истории
       if (data && data[0]) {
         await supabaseClient.from('visit_history').insert([{
           guest_id: data[0].id,
@@ -374,24 +411,6 @@ async function saveGuest(e) {
   }
 }
 
-// УДАЛЕНИЕ ОТДЕЛЬНОЙ ЗАМЕТКИ С КАРТОЧКИ
-async function clearGuestNote(guestId, field) {
-  const title = field === 'preferences' ? 'предпочтения' : 'важную информацию';
-  showConfirm(`Удалить ${title} у этого гостя?`, async () => {
-    try {
-      const updateData = {};
-      updateData[field] = '';
-      const { error } = await supabaseClient.from('guests').update(updateData).eq('id', guestId);
-      if (error) throw error;
-      showToast('Заметка удалена', 'success');
-      loadGuests();
-    } catch (err) {
-      console.error(err);
-      showToast('Ошибка при удалении заметки', 'error');
-    }
-  });
-}
-
 async function deleteGuest(id) {
   showConfirm('Вы уверены, что хотите полностью удалить этого гостя?', async () => {
     try {
@@ -405,7 +424,7 @@ async function deleteGuest(id) {
   });
 }
 
-// ФИКСАЦИЯ ВИЗИТА С ГАРАНТИРОВАННОЙ ЗАПИСЬЮ В ИСТОРИЮ
+// ФИКСАЦИЯ ВИЗИТА
 async function addVisit(guestId) {
   const guest = allGuests.find(g => g.id === guestId);
   if (!guest) return;
@@ -415,22 +434,22 @@ async function addVisit(guestId) {
   const targetBranch = (currentBranchId !== 'ALL') ? currentBranchId : (guest.branch_id || '11111111-1111-1111-1111-111111111111');
 
   try {
-    // 1. Сначала сохраняем запись в историю визитов
-    const { error: visitErr } = await supabaseClient.from('visit_history').insert([{
-      guest_id: guestId,
-      visit_date: today,
-      branch_id: targetBranch
-    }]);
-
-    if (visitErr) throw visitErr;
-
-    // 2. Обновляем счетчик визитов у карточки гостя
+    // 1. Обновляем счетчик у карточки гостя
     const { error: guestErr } = await supabaseClient
       .from('guests')
       .update({ visit_count: newCount, last_visit_date: today })
       .eq('id', guestId);
 
     if (guestErr) throw guestErr;
+
+    // 2. Вставляем запись в историю визитов
+    const { error: visitErr } = await supabaseClient.from('visit_history').insert([{
+      guest_id: guestId,
+      visit_date: today,
+      branch_id: targetBranch
+    }]);
+
+    if (visitErr) console.warn('Ошибка фиксации истории визитов:', visitErr);
 
     showToast('Визит успешно зафиксирован!', 'success');
     loadGuests();
@@ -440,7 +459,7 @@ async function addVisit(guestId) {
   }
 }
 
-// ПРОСМОТР И ИСТОРИИ ВИЗИТОВ
+// ИСТОРИЯ ВИЗИТОВ
 async function showVisitsHistory(guestId) {
   const container = document.getElementById('visits-modal-list');
   container.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">Загрузка истории...</p>';
@@ -514,7 +533,7 @@ function exportToCSV() {
   }
 
   let csvContent = '\uFEFF';
-  csvContent += 'ФИО;Телефон;Дата рождения;Категория;Визитов;Последний визит;Предпочтения;Заметки\n';
+  csvContent += 'ФИО;Телефон;Дата рождения;Категория;Визитов;Последний визит\n';
 
   allGuests.forEach(g => {
     const row = [
@@ -523,9 +542,7 @@ function exportToCSV() {
       `"${g.birth_date || ''}"`,
       `"${g.category || ''}"`,
       `"${g.visit_count || 0}"`,
-      `"${g.last_visit_date || ''}"`,
-      `"${(g.preferences || '').replace(/"/g, '""')}"`,
-      `"${(g.important_info || '').replace(/"/g, '""')}"`
+      `"${g.last_visit_date || ''}"`
     ];
     csvContent += row.join(';') + '\n';
   });
