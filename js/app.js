@@ -1,477 +1,294 @@
 // js/app.js
-let currentSession = null;
+
+let currentUser = null;
+let currentBranchId = 'ALL';
 let allGuests = [];
-let currentFilterMode = 'ALL';
+let currentFilter = 'ALL';
+let confirmCallback = null;
 
-// --- УВЕДОМЛЕНИЯ И МОДАЛКИ ---
-function showToast(message, type = 'success') {
-  const container = document.getElementById('toast-container');
-  const toast = document.createElement('div');
-  const bgColor = type === 'success' ? 'bg-emerald-600' : type === 'error' ? 'bg-rose-600' : 'bg-indigo-600';
-  const iconName = type === 'success' ? 'check-circle' : type === 'error' ? 'alert-triangle' : 'info';
-  
-  toast.className = `${bgColor} text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 text-xs sm:text-sm font-medium transform translate-y-2 opacity-0 transition-all duration-300 pointer-events-auto border border-white/10`;
-  toast.innerHTML = `<i data-lucide="${iconName}" class="w-4 h-4 shrink-0"></i> <span>${message}</span>`;
-  
-  container.appendChild(toast);
+// Инициализация Иконок Lucide
+document.addEventListener('DOMContentLoaded', () => {
   lucide.createIcons();
+  checkSavedAuth();
+});
 
-  requestAnimationFrame(() => toast.classList.remove('translate-y-2', 'opacity-0'));
-
-  setTimeout(() => {
-    toast.classList.add('opacity-0', 'translate-y-2');
-    setTimeout(() => toast.remove(), 300);
-  }, 3000);
-}
-
-function showConfirm(title, text, onConfirm) {
-  const modal = document.getElementById('confirm-modal');
-  document.getElementById('confirm-title').innerText = title;
-  document.getElementById('confirm-text').innerText = text;
-  
-  const okBtn = document.getElementById('confirm-ok-btn');
-  const newOkBtn = okBtn.cloneNode(true);
-  okBtn.parentNode.replaceChild(newOkBtn, okBtn);
-  
-  newOkBtn.addEventListener('click', () => {
-    closeConfirmModal();
-    onConfirm();
-  });
-  
-  modal.classList.remove('hidden');
-  lucide.createIcons();
-}
-
-function closeConfirmModal() {
-  document.getElementById('confirm-modal').classList.add('hidden');
-}
-
-function showPrompt(title, placeholder, defaultValue, onConfirm) {
-  const modal = document.getElementById('prompt-modal');
-  document.getElementById('prompt-title').innerText = title;
-  const input = document.getElementById('prompt-input');
-  input.placeholder = placeholder || '';
-  input.value = defaultValue || '';
-  
-  const okBtn = document.getElementById('prompt-ok-btn');
-  const newOkBtn = okBtn.cloneNode(true);
-  okBtn.parentNode.replaceChild(newOkBtn, okBtn);
-  
-  newOkBtn.addEventListener('click', () => {
-    const val = input.value.trim();
-    closePromptModal();
-    onConfirm(val);
-  });
-  
-  modal.classList.remove('hidden');
-  input.focus();
-  lucide.createIcons();
-}
-
-function closePromptModal() {
-  document.getElementById('prompt-modal').classList.add('hidden');
-}
-
-function formatPhoneInput(e) {
-  let input = e.target.value.replace(/\D/g, '');
-  if (!input.startsWith('996')) {
-    if (input.startsWith('0')) input = '996' + input.slice(1);
-    else if (input.length > 0) input = '996' + input;
-  }
-  input = input.substring(0, 12);
-  let formatted = '+996';
-  if (input.length > 3) formatted += ' (' + input.substring(3, 6);
-  if (input.length >= 6) formatted += ') ' + input.substring(6, 9);
-  if (input.length >= 9) formatted += '-' + input.substring(9, 11);
-  if (input.length >= 11) formatted += '-' + input.substring(11, 12);
-  e.target.value = formatted;
-}
-
-// --- ОТПРАВКА ПРИГЛАШЕНИЯ В WHATSAPP ---
-function sendBirthdayInvite(phone, fullName) {
-  if (!phone) return showToast('У гостя не указан номер телефона', 'error');
-
-  let cleanPhone = phone.replace(/\D/g, '');
-  if (cleanPhone.startsWith('0')) cleanPhone = '996' + cleanPhone.slice(1);
-  if (!cleanPhone.startsWith('996') && cleanPhone.length === 9) cleanPhone = '996' + cleanPhone;
-
-  const firstName = fullName ? fullName.split(' ')[0] : 'гость';
-
-  const message = `Здравствуйте, ${firstName}! 👋\n\n` +
-                  `Команда нашего заведения от всей души поздравляет вас с наступающим Днем рождения! 🎂\n\n` +
-                  `В честь праздника мы приготовили для вас подарок — скидку 10% на весь чек и фирменный десерт от шефа! 🎉\n\n` +
-                  `Скидка действует в день рождения и 3 дня после него. Желаете забронировать столик для себя и близких?`;
-
-  const encodedText = encodeURIComponent(message);
-  window.open(`https://wa.me/${cleanPhone}?text=${encodedText}`, '_blank');
-}
-
-// --- АВТОРИЗАЦИЯ ---
-function handleAuth(e) {
-  if (e) e.preventDefault();
-  const keyInput = document.getElementById('access-key-input');
-  const errEl = document.getElementById('auth-error');
-  if (!keyInput) return;
-  const key = keyInput.value.trim();
-  
-  if (ACCESS_KEYS[key]) {
-    currentSession = ACCESS_KEYS[key];
-    localStorage.setItem('crm_access_key', key);
-    if (errEl) errEl.classList.add('hidden');
-    showToast(`Добро пожаловать, ${currentSession.name}!`, 'info');
-    initApp();
-  } else {
-    if (errEl) errEl.classList.remove('hidden');
-  }
-}
-
-function checkSavedSession() {
+// ПРОВЕРКА СОХРАНЕННОГО ВХОДА
+function checkSavedAuth() {
   const savedKey = localStorage.getItem('crm_access_key');
   if (savedKey && ACCESS_KEYS[savedKey]) {
-    currentSession = ACCESS_KEYS[savedKey];
-    initApp();
+    loginUser(savedKey);
   }
+}
+
+// АВТОРИЗАЦИЯ
+function handleAuth(e) {
+  e.preventDefault();
+  const inputKey = document.getElementById('access-key-input').value.trim();
+  const errorElement = document.getElementById('auth-error');
+
+  if (ACCESS_KEYS[inputKey]) {
+    errorElement.classList.add('hidden');
+    localStorage.setItem('crm_access_key', inputKey);
+    loginUser(inputKey);
+  } else {
+    errorElement.classList.remove('hidden');
+  }
+}
+
+function loginUser(key) {
+  currentUser = ACCESS_KEYS[key];
+  
+  // Установка прав и филиала
+  if (currentUser.role === 'ADMIN') {
+    currentBranchId = 'ALL';
+  } else {
+    currentBranchId = currentUser.branchId;
+  }
+
+  // Обновление UI шапки
+  document.getElementById('user-role-badge').innerText = currentUser.name;
+  document.getElementById('auth-screen').classList.add('hidden');
+  document.getElementById('app-screen').classList.remove('hidden');
+
+  initBranchSelect();
+  loadGuests();
 }
 
 function logout() {
   localStorage.removeItem('crm_access_key');
-  currentSession = null;
+  currentUser = null;
   document.getElementById('app-screen').classList.add('hidden');
   document.getElementById('auth-screen').classList.remove('hidden');
   document.getElementById('access-key-input').value = '';
-  showToast('Вы вышли из системы', 'info');
 }
 
-function initApp() {
-  document.getElementById('auth-screen').classList.add('hidden');
-  document.getElementById('app-screen').classList.remove('hidden');
-  
-  const roleBadge = document.getElementById('user-role-badge');
-  if (roleBadge) roleBadge.innerHTML = `<i data-lucide="shield-check" class="w-3.5 h-3.5"></i> ${currentSession.name}`;
+// ИНИЦИАЛИЗАЦИЯ И СМЕНА ФИЛИАЛА
+function initBranchSelect() {
+  const select = document.getElementById('branch-select');
+  if (!select) return;
 
-  const branchSelect = document.getElementById('branch-select');
-  if (branchSelect) {
-    if (currentSession.role === 'BRANCH_MANAGER') {
-      branchSelect.value = currentSession.branchId;
-      branchSelect.disabled = true;
-    } else {
-      branchSelect.value = 'ALL';
-      branchSelect.disabled = false;
-    }
+  if (currentUser.role === 'ADMIN') {
+    select.disabled = false;
+    let options = '<option value="ALL">🌐 Все филиалы (Вся сеть)</option>';
+    
+    Object.values(ACCESS_KEYS).forEach(item => {
+      if (item.branchId) {
+        options += `<option value="${item.branchId}">${item.name}</option>`;
+      }
+    });
+    
+    select.innerHTML = options;
+    select.value = currentBranchId || 'ALL';
+  } else {
+    select.disabled = true;
+    select.innerHTML = `<option value="${currentUser.branchId}">${currentUser.name}</option>`;
+    currentBranchId = currentUser.branchId;
   }
+}
 
+function changeBranch() {
+  const select = document.getElementById('branch-select');
+  currentBranchId = select.value;
   loadGuests();
 }
 
-// --- ЗАГРУЗКА И ФИЛЬТРАЦИЯ ---
+// ЗАГРУЗКА ГОСТЕЙ ИЗ SUPABASE
 async function loadGuests() {
-  renderSkeletons();
-  const branchSelect = document.getElementById('branch-select');
-  const branchId = branchSelect ? branchSelect.value : 'ALL';
-  
-  let query = supabaseClient.from('guests').select('*, guest_comments(*), visit_history(*)');
-  if (branchId !== 'ALL') query = query.eq('branch_id', branchId);
+  try {
+    let query = supabaseClient.from('guests').select('*').order('created_at', { ascending: false });
 
-  const { data: guests, error } = await query.order('created_at', { ascending: false });
+    // Фильтр по филиалу если выбит конкретный точка
+    if (currentBranchId !== 'ALL') {
+      query = query.eq('branch_id', currentBranchId);
+    }
 
-  if (error) {
-    document.getElementById('guests-list').innerHTML = `
-      <div class="p-4 bg-rose-50 text-rose-600 rounded-xl text-xs sm:text-sm flex items-center gap-2">
-        <i data-lucide="alert-circle" class="w-5 h-5"></i> Ошибка загрузки: ${error.message}
-      </div>`;
-    lucide.createIcons();
-    return;
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    allGuests = data || [];
+    updateStats();
+    applyFilters();
+  } catch (err) {
+    console.error('Ошибка загрузки гостей:', err);
+    showToast('Не удалось загрузить данные', 'error');
   }
-
-  allGuests = guests || [];
-  updateStats();
-  applyFilters();
 }
 
-function renderSkeletons() {
-  const container = document.getElementById('guests-list');
-  if (!container) return;
-  container.innerHTML = [1, 2, 3].map(() => `
-    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80 space-y-4 animate-skeleton">
-      <div class="flex justify-between items-center">
-        <div class="h-6 bg-slate-200 rounded-lg w-1/3"></div>
-        <div class="h-8 bg-slate-200 rounded-lg w-1/4"></div>
-      </div>
-      <div class="grid grid-cols-3 gap-3">
-        <div class="h-10 bg-slate-100 rounded-xl"></div>
-        <div class="h-10 bg-slate-100 rounded-xl"></div>
-        <div class="h-10 bg-slate-100 rounded-xl"></div>
-      </div>
-    </div>
-  `).join('');
-}
-
-function changeBranch() { loadGuests(); }
-
-// Изменено по умолчанию на 3 дня
-function isBirthdaySoon(dateStr, daysAhead = 3) {
-  if (!dateStr) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const birthDate = new Date(dateStr);
-  const nextBirthday = new Date(today.getFullYear(), birthDate.getMonth(), birthDate.getDate());
-  
-  if (nextBirthday < today) {
-    nextBirthday.setFullYear(today.getFullYear() + 1);
-  }
-  
-  const diffDays = Math.ceil((nextBirthday - today) / (1000 * 60 * 60 * 24));
-  return diffDays >= 0 && diffDays <= daysAhead;
-}
-
-function updateStats() {
-  const totalEl = document.getElementById('stat-total');
-  const vipEl = document.getElementById('stat-vip');
-  const inactiveEl = document.getElementById('stat-inactive');
-  const bdayEl = document.getElementById('stat-birthdays');
-
-  if (totalEl) totalEl.innerText = allGuests.length;
-  if (vipEl) vipEl.innerText = allGuests.filter(g => g.category === 'VIP').length;
-  
-  const now = new Date();
-  const thirtyDaysAgo = new Date(now.setDate(now.getDate() - 30));
-
-  const inactiveCount = allGuests.filter(g => {
-    if (!g.visit_history || g.visit_history.length === 0) return true;
-    const lastVisit = new Date(Math.max(...g.visit_history.map(v => new Date(v.visit_date))));
-    return lastVisit < thirtyDaysAgo;
-  }).length;
-
-  if (inactiveEl) inactiveEl.innerText = inactiveCount;
-  if (bdayEl) bdayEl.innerText = allGuests.filter(g => isBirthdaySoon(g.birth_date, 3)).length;
-}
-
-function setFilter(mode) {
-  currentFilterMode = mode;
-  ['total', 'vip', 'inactive', 'birthdays'].forEach(m => {
-    document.getElementById(`card-${m}`)?.classList.remove('border-2', 'border-emerald-500', 'border-indigo-500', 'border-rose-500', 'border-amber-500');
-  });
-
-  const badgeText = document.getElementById('filter-name-text');
-  if (mode === 'VIP') {
-    document.getElementById('card-vip')?.classList.add('border-2', 'border-indigo-500');
-    if (badgeText) badgeText.innerText = '⭐ VIP-гости';
-  } else if (mode === 'INACTIVE') {
-    document.getElementById('card-inactive')?.classList.add('border-2', 'border-rose-500');
-    if (badgeText) badgeText.innerText = '⚠️ Не были > 30 дней';
-  } else if (mode === 'BIRTHDAYS') {
-    document.getElementById('card-birthdays')?.classList.add('border-2', 'border-amber-500');
-    if (badgeText) badgeText.innerText = '🎂 ДР в ближайшие 3 дня';
-  } else {
-    document.getElementById('card-total')?.classList.add('border-2', 'border-emerald-500');
-    if (badgeText) badgeText.innerText = 'Все гости';
-  }
-
-  applyFilters();
-}
-
+// ФИЛЬТРАЦИЯ И ПОИСК
 function applyFilters() {
-  const searchInput = document.getElementById('search');
-  const q = searchInput ? searchInput.value.toLowerCase() : '';
-  const now = new Date();
-  const thirtyDaysAgo = new Date(now.setDate(now.getDate() - 30));
-
-  let filtered = allGuests.filter(g => {
-    const matchesSearch = (g.full_name || '').toLowerCase().includes(q) || (g.phone || '').includes(q);
+  const searchVal = document.getElementById('search').value.toLowerCase().trim();
+  
+  let filtered = allGuests.filter(guest => {
+    const matchesSearch = (guest.full_name && guest.full_name.toLowerCase().includes(searchVal)) ||
+                          (guest.phone && guest.phone.includes(searchVal));
+    
     if (!matchesSearch) return false;
 
-    if (currentFilterMode === 'VIP') return g.category === 'VIP';
-    if (currentFilterMode === 'BIRTHDAYS') return isBirthdaySoon(g.birth_date, 3);
-    if (currentFilterMode === 'INACTIVE') {
-      if (!g.visit_history || g.visit_history.length === 0) return true;
-      const lastVisit = new Date(Math.max(...g.visit_history.map(v => new Date(v.visit_date))));
-      return lastVisit < thirtyDaysAgo;
+    if (currentFilter === 'VIP') {
+      return guest.category === 'VIP';
+    } else if (currentFilter === 'BIRTHDAYS') {
+      return isBirthdaySoon(guest.birth_date);
+    } else if (currentFilter === 'INACTIVE') {
+      return isInactive(guest.last_visit_date);
     }
+
     return true;
   });
 
   renderGuests(filtered);
 }
 
-// --- РЕНДЕРИНГ И РАБОТА С ГОСТЯМИ ---
+function setFilter(filterType) {
+  currentFilter = filterType;
+  
+  // Визуальное выделение карточек
+  const cards = {
+    'ALL': 'card-total',
+    'BIRTHDAYS': 'card-birthdays',
+    'VIP': 'card-vip',
+    'INACTIVE': 'card-inactive'
+  };
+
+  const names = {
+    'ALL': 'Все гости',
+    'BIRTHDAYS': 'Ближайшие ДР (3 дня)',
+    'VIP': 'VIP клиенты',
+    'INACTIVE': 'Не посещали > 30 дней'
+  };
+
+  Object.values(cards).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('ring-2', 'ring-indigo-500', 'border-2', 'border-emerald-500');
+  });
+
+  const activeEl = document.getElementById(cards[filterType]);
+  if (activeEl) activeEl.classList.add('ring-2', 'ring-indigo-500');
+
+  document.getElementById('filter-name-text').innerText = names[filterType];
+  applyFilters();
+}
+
+// РЕНДЕР КАРТОЧЕК ГОСТЕЙ
 function renderGuests(guests) {
   const container = document.getElementById('guests-list');
-  if (!container) return;
+  container.innerHTML = '';
 
-  if (!guests.length) {
-    container.innerHTML = `<div class="p-8 bg-white rounded-2xl text-center text-slate-400 text-sm border border-slate-200/80">Гости не найдены</div>`;
+  if (guests.length === 0) {
+    container.innerHTML = `
+      <div class="bg-white p-8 rounded-2xl text-center text-slate-400 border border-slate-200/80 space-y-2">
+        <i data-lucide="users" class="w-10 h-10 mx-auto text-slate-300"></i>
+        <p class="font-medium">Гости не найдены</p>
+      </div>
+    `;
+    lucide.createIcons();
     return;
   }
 
-  container.innerHTML = guests.map(guest => {
-    const visits = guest.visit_history || [];
-    const comments = guest.guest_comments || [];
-    
-    let lastVisitStr = 'Нет визитов';
-    if (visits.length > 0) {
-      const sortedVisits = visits.sort((a,b) => new Date(b.visit_date) - new Date(a.visit_date));
-      lastVisitStr = new Date(sortedVisits[0].visit_date).toLocaleDateString('ru-RU');
-    }
+  guests.forEach(guest => {
+    const card = document.createElement('div');
+    card.className = 'bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200/80 space-y-3 hover:shadow-md transition';
 
-    const hasBirthdaySoon = isBirthdaySoon(guest.birth_date, 3);
-    const birthdayWarning = hasBirthdaySoon ? `
-      <div class="inline-flex items-center gap-1.5 flex-wrap">
-        <span class="inline-flex items-center gap-1 text-amber-600 font-bold text-xs bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
-          <i data-lucide="cake" class="w-3.5 h-3.5"></i> Скоро ДР!
-        </span>
-        <button onclick="sendBirthdayInvite('${guest.phone}', '${guest.full_name}')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold px-2 py-0.5 rounded-md transition shadow-sm flex items-center gap-1 active:scale-95">
-          <i data-lucide="message-square" class="w-3 h-3"></i> Пригласить в WA
-        </button>
-      </div>` : '';
+    const categoryBadge = getCategoryBadge(guest.category);
+    const formattedBirth = formatDate(guest.birth_date);
+    const formattedLastVisit = formatDate(guest.last_visit_date);
+    const visitsCount = guest.visit_count || 0;
 
-    const missingPreferences = !guest.preferences ? '<span class="text-amber-600 text-xs font-semibold block mt-0.5 flex items-center gap-1"><i data-lucide="alert-circle" class="w-3 h-3"></i> Укажите предпочтения</span>' : '';
+    // Ссылка на WhatsApp
+    const cleanPhone = guest.phone ? guest.phone.replace(/[^0-9]/g, '') : '';
+    const waText = encodeURIComponent(`Здравствуйте, ${guest.full_name}! Приглашаем вас в наш ресторан.`);
+    const waUrl = `https://wa.me/${cleanPhone}?text=${waText}`;
 
-    return `
-    <div class="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200/80 space-y-4 hover:shadow-md transition-all duration-200">
-      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b pb-3 border-slate-100">
-        <div>
-          <div class="flex items-center gap-2 flex-wrap">
-            <h2 class="text-base sm:text-lg font-bold text-slate-900">${guest.full_name}</h2>
-            <span class="px-2.5 py-0.5 rounded-md text-[11px] font-bold ${getCategoryBadge(guest.category)}">${guest.category}</span>
-            ${birthdayWarning}
-          </div>
-          <p class="text-xs sm:text-sm text-slate-500 mt-1 font-medium flex items-center gap-1">
-            <i data-lucide="phone" class="w-3.5 h-3.5 text-slate-400"></i> ${guest.phone}
-          </p>
+    card.innerHTML = `
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div class="flex items-center gap-2 flex-wrap">
+          <h3 class="font-bold text-slate-900 text-base sm:text-lg">${escapeHtml(guest.full_name)}</h3>
+          ${categoryBadge}
         </div>
-        
-        <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap w-full sm:w-auto pt-1 sm:pt-0 border-t sm:border-0 border-slate-100">
-          <button onclick="openEditModal('${guest.id}')" title="Редактировать" class="flex-1 sm:flex-none bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-slate-200 transition flex items-center justify-center gap-1">
-            <i data-lucide="pencil" class="w-3.5 h-3.5"></i> <span class="inline sm:hidden lg:inline">Изменить</span>
+        <div class="flex items-center gap-1.5 self-end sm:self-auto">
+          <a href="${waUrl}" target="_blank" title="WhatsApp" class="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-xl transition">
+            <i data-lucide="message-circle" class="w-4 h-4"></i>
+          </a>
+          <button onclick="addVisit('${guest.id}')" title="+1 Визит" class="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl text-xs font-semibold flex items-center gap-1 transition">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i> Визит
           </button>
-          <button onclick="openVisitsModal('${guest.id}')" title="Визиты" class="flex-1 sm:flex-none bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-slate-200 transition flex items-center justify-center gap-1">
-            <i data-lucide="clock" class="w-3.5 h-3.5"></i> <span class="inline sm:hidden lg:inline">Визиты</span>
+          <button onclick="openEditModal('${guest.id}')" title="Изменить" class="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition">
+            <i data-lucide="edit-3" class="w-4 h-4"></i>
           </button>
-          <button onclick="recordVisit('${guest.id}')" class="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded-xl transition shadow-sm flex items-center justify-center gap-1 active:scale-95">
-            <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> + Визит
-          </button>
-          <button onclick="deleteGuest('${guest.id}')" title="Удалить" class="bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold p-1.5 rounded-xl transition flex items-center justify-center">
+          <button onclick="deleteGuest('${guest.id}')" title="Удалить" class="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition">
             <i data-lucide="trash-2" class="w-4 h-4"></i>
           </button>
         </div>
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs sm:text-sm">
-        <div class="bg-slate-50/70 p-2.5 rounded-xl sm:bg-transparent sm:p-0">
-          <span class="font-medium text-slate-400 text-[11px] block flex items-center gap-1"><i data-lucide="calendar" class="w-3 h-3"></i> День рождения</span>
-          <p class="text-slate-800 font-semibold mt-0.5">${formatBirthDate(guest.birth_date)}</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs sm:text-sm text-slate-600 pt-1">
+        <div class="flex items-center gap-2">
+          <i data-lucide="phone" class="w-4 h-4 text-slate-400"></i>
+          <span>${escapeHtml(guest.phone)}</span>
         </div>
-        <div class="bg-slate-50/70 p-2.5 rounded-xl sm:bg-transparent sm:p-0">
-          <span class="font-medium text-slate-400 text-[11px] block flex items-center gap-1"><i data-lucide="history" class="w-3 h-3"></i> Последний визит</span>
-          <p class="text-slate-800 font-semibold mt-0.5">${lastVisitStr} <button onclick="openVisitsModal('${guest.id}')" class="text-xs text-indigo-600 font-normal underline ml-1">(${visits.length} всего)</button></p>
+        <div class="flex items-center gap-2">
+          <i data-lucide="cake" class="w-4 h-4 text-slate-400"></i>
+          <span>${formattedBirth || 'Не указана'}</span>
         </div>
-        <div class="bg-slate-50/70 p-2.5 rounded-xl sm:bg-transparent sm:p-0">
-          <span class="font-medium text-slate-400 text-[11px] block flex items-center gap-1"><i data-lucide="heart" class="w-3 h-3"></i> Предпочтения</span>
-          <p class="text-slate-800 mt-0.5">${guest.preferences || 'Не указаны'}</p>
-          ${missingPreferences}
+        <div class="flex items-center gap-2">
+          <i data-lucide="calendar" class="w-4 h-4 text-slate-400"></i>
+          <span>Последний визит: <strong>${formattedLastVisit || 'Нет'}</strong></span>
         </div>
-      </div>
-
-      ${guest.important_info ? `
-        <div class="bg-amber-50/80 p-3 rounded-xl text-xs text-amber-900 border border-amber-200/60 leading-relaxed flex items-start gap-2">
-          <i data-lucide="info" class="w-4 h-4 text-amber-600 shrink-0 mt-0.5"></i>
-          <div><strong>Важная информация:</strong> ${guest.important_info}</div>
-        </div>
-      ` : ''}
-
-      <div class="pt-2 border-t border-slate-100 space-y-2">
-        <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block flex items-center gap-1"><i data-lucide="message-square" class="w-3 h-3"></i> Заметки</span>
-        <div class="space-y-1.5">
-          ${comments.length === 0 ? '<p class="text-xs text-slate-400 italic">Заметок пока нет</p>' : ''}
-          ${comments.map(c => `
-            <div class="bg-slate-50 p-2.5 rounded-xl text-xs flex justify-between items-center border border-slate-200/60 gap-2">
-              <p class="text-slate-700 leading-relaxed flex-1">${c.comment}</p>
-              <div class="flex items-center gap-1 shrink-0">
-                <span class="text-[10px] text-slate-400 font-medium mr-1">${new Date(c.created_at).toLocaleDateString('ru-RU')}</span>
-                <button onclick="editComment('${c.id}')" class="p-1 hover:bg-slate-200 rounded-lg text-slate-600 transition"><i data-lucide="pencil" class="w-3 h-3"></i></button>
-                <button onclick="deleteComment('${c.id}')" class="p-1 hover:bg-rose-100 rounded-lg text-rose-600 transition"><i data-lucide="trash-2" class="w-3 h-3"></i></button>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-        <div class="flex gap-2 pt-1">
-          <input type="text" id="comment-input-${guest.id}" placeholder="Добавить заметку..." class="flex-1 text-base sm:text-xs px-3.5 py-2 sm:py-1.5 bg-slate-50 border rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 transition">
-          <button onclick="addComment('${guest.id}')" class="bg-slate-800 hover:bg-slate-900 text-white text-xs px-3.5 py-2 sm:py-1.5 rounded-xl font-medium transition shrink-0 flex items-center gap-1">
-            <i data-lucide="send" class="w-3 h-3"></i> Сохранить
+        <div class="flex items-center gap-2">
+          <i data-lucide="history" class="w-4 h-4 text-slate-400"></i>
+          <button onclick="showVisitsHistory('${guest.id}')" class="text-indigo-600 hover:underline font-semibold">
+            Визитов: ${visitsCount} (История)
           </button>
         </div>
       </div>
-    </div>`;
-  }).join('');
+
+      ${guest.preferences ? `
+        <div class="text-xs bg-slate-50 p-2.5 rounded-xl text-slate-600 border border-slate-100 flex items-start gap-1.5">
+          <i data-lucide="heart" class="w-3.5 h-3.5 text-indigo-500 mt-0.5 shrink-0"></i>
+          <span><strong>Предпочтения:</strong> ${escapeHtml(guest.preferences)}</span>
+        </div>
+      ` : ''}
+
+      ${guest.important_info ? `
+        <div class="text-xs bg-amber-50 p-2.5 rounded-xl text-amber-800 border border-amber-100 flex items-start gap-1.5">
+          <i data-lucide="alert-circle" class="w-3.5 h-3.5 text-amber-600 mt-0.5 shrink-0"></i>
+          <span><strong>Важно:</strong> ${escapeHtml(guest.important_info)}</span>
+        </div>
+      ` : ''}
+    `;
+
+    container.appendChild(card);
+  });
 
   lucide.createIcons();
 }
 
-function formatBirthDate(dateStr) {
-  if (!dateStr) return 'Не указан';
-  return new Date(dateStr).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+// СТАЦИОНАРНАЯ СТАТИСТИКА
+function updateStats() {
+  document.getElementById('stat-total').innerText = allGuests.length;
+  
+  const vipCount = allGuests.filter(g => g.category === 'VIP').length;
+  document.getElementById('stat-vip').innerText = vipCount;
+
+  const birthdayCount = allGuests.filter(g => isBirthdaySoon(g.birth_date)).length;
+  document.getElementById('stat-birthdays').innerText = birthdayCount;
+
+  const inactiveCount = allGuests.filter(g => isInactive(g.last_visit_date)).length;
+  document.getElementById('stat-inactive').innerText = inactiveCount;
 }
 
-function getCategoryBadge(cat) {
-  switch(cat) {
-    case 'VIP': return 'bg-indigo-100 text-indigo-800 border border-indigo-200';
-    case 'PROBLEM': return 'bg-rose-100 text-rose-800 border border-rose-200';
-    case 'REGULAR': return 'bg-emerald-100 text-emerald-800 border border-emerald-200';
-    default: return 'bg-slate-100 text-slate-800 border border-slate-200';
-  }
-}
-
-async function addComment(guestId) {
-  const input = document.getElementById(`comment-input-${guestId}`);
-  if (!input) return;
-  const text = input.value.trim();
-  if (!text) return;
-
-  const { error } = await supabaseClient.from('guest_comments').insert([{ guest_id: guestId, comment: text }]);
-  if (error) showToast('Ошибка добавления заметки', 'error');
-  else { showToast('Заметка добавлена'); loadGuests(); }
-}
-
-async function editComment(commentId) {
-  let currentText = '';
-  allGuests.forEach(g => {
-    const found = (g.guest_comments || []).find(c => c.id === commentId);
-    if (found) currentText = found.comment;
-  });
-
-  showPrompt('Редактировать заметку', 'Заметка...', currentText, async (newText) => {
-    if (!newText) return showToast('Заметка не может быть пустой', 'error');
-    const { error } = await supabaseClient.from('guest_comments').update({ comment: newText }).eq('id', commentId);
-    if (error) showToast('Ошибка обновления', 'error');
-    else { showToast('Заметка обновлена'); loadGuests(); }
-  });
-}
-
-async function deleteComment(commentId) {
-  showConfirm('Удаление заметки', 'Удалить эту заметку?', async () => {
-    const { error } = await supabaseClient.from('guest_comments').delete().eq('id', commentId);
-    if (error) showToast('Ошибка удаления', 'error');
-    else { showToast('Заметка удалена'); loadGuests(); }
-  });
-}
-
-function toggleModal(show) { document.getElementById('guest-modal')?.classList.toggle('hidden', !show); }
-function toggleVisitsModal(show) { document.getElementById('visits-modal')?.classList.toggle('hidden', !show); }
-
+// МОДАЛКА И СОХРАНЕНИЕ
 function openCreateModal() {
-  document.getElementById('modal-title').innerHTML = `<i data-lucide="user-plus" class="w-5 h-5 text-indigo-600"></i> Новый гость`;
   document.getElementById('edit_guest_id').value = '';
   document.getElementById('add-guest-form').reset();
+  document.getElementById('modal-title').innerText = 'Новый гость';
   toggleModal(true);
-  lucide.createIcons();
 }
 
 function openEditModal(guestId) {
   const guest = allGuests.find(g => g.id === guestId);
   if (!guest) return;
 
-  document.getElementById('modal-title').innerHTML = `<i data-lucide="user-check" class="w-5 h-5 text-indigo-600"></i> Редактировать гостя`;
   document.getElementById('edit_guest_id').value = guest.id;
   document.getElementById('full_name').value = guest.full_name || '';
   document.getElementById('phone').value = guest.phone || '';
@@ -480,134 +297,249 @@ function openEditModal(guestId) {
   document.getElementById('preferences').value = guest.preferences || '';
   document.getElementById('important_info').value = guest.important_info || '';
 
+  document.getElementById('modal-title').innerText = 'Редактировать гостя';
   toggleModal(true);
-  lucide.createIcons();
 }
 
 async function saveGuest(e) {
   e.preventDefault();
-  const guestId = document.getElementById('edit_guest_id').value;
-  const currentBranch = document.getElementById('branch-select').value;
-  const targetBranch = currentBranch === 'ALL' ? '11111111-1111-1111-1111-111111111111' : currentBranch;
 
-  const guestData = {
-    full_name: document.getElementById('full_name').value.trim(),
-    phone: document.getElementById('phone').value.trim(),
-    birth_date: document.getElementById('birth_date').value || null,
-    category: document.getElementById('category').value,
-    preferences: document.getElementById('preferences').value.trim(),
-    important_info: document.getElementById('important_info').value.trim()
+  const id = document.getElementById('edit_guest_id').value;
+  const full_name = document.getElementById('full_name').value.trim();
+  const phone = document.getElementById('phone').value.trim();
+  const birth_date = document.getElementById('birth_date').value || null;
+  const category = document.getElementById('category').value;
+  const preferences = document.getElementById('preferences').value.trim();
+  const important_info = document.getElementById('important_info').value.trim();
+
+  // Привязка филиала
+  const branch_id = (currentBranchId !== 'ALL') ? currentBranchId : (currentUser.branchId || '11111111-1111-1111-1111-111111111111');
+
+  const payload = {
+    full_name,
+    phone,
+    birth_date,
+    category,
+    preferences,
+    important_info,
+    branch_id
   };
 
-  let error;
-  if (guestId) ({ error } = await supabaseClient.from('guests').update(guestData).eq('id', guestId));
-  else ({ error } = await supabaseClient.from('guests').insert([{ ...guestData, branch_id: targetBranch }]));
+  try {
+    if (id) {
+      const { error } = await supabaseClient.from('guests').update(payload).eq('id', id);
+      if (error) throw error;
+      showToast('Данные гостя обновлены', 'success');
+    } else {
+      payload.visit_count = 1;
+      payload.last_visit_date = new Date().toISOString().split('T')[0];
+      const { error } = await supabaseClient.from('guests').insert([payload]);
+      if (error) throw error;
+      showToast('Новый гость сохранен', 'success');
+    }
 
-  if (error) showToast('Ошибка сохранения: ' + error.message, 'error');
-  else {
-    showToast(guestId ? 'Данные обновлены' : 'Гость создан!');
     toggleModal(false);
     loadGuests();
+  } catch (err) {
+    console.error(err);
+    showToast('Ошибка при сохранении', 'error');
   }
 }
 
-async function deleteGuest(guestId) {
+async function deleteGuest(id) {
+  showConfirm('Вы уверены, что хотите удалить этого гостя?', async () => {
+    try {
+      const { error } = await supabaseClient.from('guests').delete().eq('id', id);
+      if (error) throw error;
+      showToast('Гость удален', 'success');
+      loadGuests();
+    } catch (err) {
+      showToast('Ошибка при удалении', 'error');
+    }
+  });
+}
+
+// ДОБАВЛЕНИЕ ВИЗИТА
+async function addVisit(guestId) {
   const guest = allGuests.find(g => g.id === guestId);
   if (!guest) return;
 
-  showConfirm('Удаление гостя', `Удалить гостя ${guest.full_name}? Вся история будет удалена.`, async () => {
-    await supabaseClient.from('visit_history').delete().eq('guest_id', guestId);
-    await supabaseClient.from('guest_comments').delete().eq('guest_id', guestId);
-    const { error } = await supabaseClient.from('guests').delete().eq('id', guestId);
+  const today = new Date().toISOString().split('T')[0];
+  const newCount = (guest.visit_count || 0) + 1;
 
-    if (error) showToast('Ошибка удаления', 'error');
-    else { showToast('Карточка удалена', 'info'); loadGuests(); }
-  });
+  try {
+    // 1. Обновляем карточку гостя
+    const { error: gErr } = await supabaseClient
+      .from('guests')
+      .update({ visit_count: newCount, last_visit_date: today })
+      .eq('id', guestId);
+
+    if (gErr) throw gErr;
+
+    // 2. Добавляем запись в историю визитов
+    await supabaseClient.from('visit_history').insert([{
+      guest_id: guestId,
+      visit_date: today,
+      branch_id: currentBranchId !== 'ALL' ? currentBranchId : guest.branch_id
+    }]);
+
+    showToast('Визит зафиксирован!', 'success');
+    loadGuests();
+  } catch (err) {
+    console.error(err);
+    showToast('Ошибка при добавлении визита', 'error');
+  }
 }
 
-async function recordVisit(guestId) {
-  const guest = allGuests.find(g => g.id === guestId);
-  const visits = guest?.visit_history || [];
-  const todayDate = new Date().toDateString();
-  const hasVisitToday = visits.some(v => new Date(v.visit_date).toDateString() === todayDate);
-
-  const doRecord = async () => {
-    const { error } = await supabaseClient.from('visit_history').insert([{ guest_id: guestId }]);
-    if (error) showToast('Ошибка записи визита', 'error');
-    else {
-      showToast(`Визит зафиксирован!`);
-      showPrompt('Заметка к визиту', 'Заказ / впечатления...', '', async (note) => {
-        if (note) await supabaseClient.from('guest_comments').insert([{ guest_id: guestId, comment: note }]);
-        loadGuests();
-      });
-    }
-  };
-
-  if (hasVisitToday) showConfirm('Повторный визит', `Для ${guest.full_name} сегодня уже отмечен визит. Добавить еще один?`, doRecord);
-  else doRecord();
-}
-
-function openVisitsModal(guestId) {
-  const guest = allGuests.find(g => g.id === guestId);
-  const visits = (guest?.visit_history || []).sort((a,b) => new Date(b.visit_date) - new Date(a.visit_date));
+// ПОКАЗ ИСТОРИИ ВИЗИТОВ
+async function showVisitsHistory(guestId) {
   const container = document.getElementById('visits-modal-list');
-  if (!container) return;
+  container.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">Загрузка истории...</p>';
+  toggleVisitsModal(true);
 
-  if (visits.length === 0) {
-    container.innerHTML = '<p class="text-slate-400 text-xs text-center py-4">Нет визитов</p>';
-  } else {
-    container.innerHTML = visits.map(v => `
-      <div class="flex justify-between items-center bg-slate-50 p-2.5 rounded-xl text-xs border border-slate-200/80">
-        <span class="font-medium text-slate-800 flex items-center gap-1.5"><i data-lucide="calendar" class="w-3.5 h-3.5 text-slate-400"></i> ${new Date(v.visit_date).toLocaleString('ru-RU')}</span>
-        <button onclick="deleteVisit('${v.id}', '${guestId}')" class="text-rose-600 hover:text-rose-800 font-bold px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 transition flex items-center gap-1">
-          <i data-lucide="trash-2" class="w-3 h-3"></i> Удалить
-        </button>
+  try {
+    const { data, error } = await supabaseClient
+      .from('visit_history')
+      .select('*')
+      .eq('guest_id', guestId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      container.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">История визитов пуста</p>';
+      return;
+    }
+
+    container.innerHTML = data.map(v => `
+      <div class="flex justify-between items-center p-2.5 bg-slate-50 rounded-xl text-xs text-slate-700">
+        <span>📅 ${formatDate(v.visit_date)}</span>
+        <span class="text-slate-400">${new Date(v.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
       </div>
     `).join('');
+  } catch (err) {
+    container.innerHTML = '<p class="text-xs text-rose-500 text-center py-4">Ошибка загрузки</p>';
   }
-  toggleVisitsModal(true);
-  lucide.createIcons();
 }
 
-async function deleteVisit(visitId, guestId) {
-  showConfirm('Удаление визита', 'Удалить этот визит?', async () => {
-    const { error } = await supabaseClient.from('visit_history').delete().eq('id', visitId);
-    if (error) showToast('Ошибка удаления', 'error');
-    else {
-      showToast('Визит удален', 'info');
-      await loadGuests();
-      openVisitsModal(guestId);
-    }
-  });
-}
-
+// ЭКСПОРТ В CSV
 function exportToCSV() {
-  if (!allGuests.length) return showToast('Нет данных для экспорта', 'error');
+  if (allGuests.length === 0) {
+    showToast('Нет данных для экспорта', 'error');
+    return;
+  }
 
-  const headers = ['Имя', 'Телефон', 'Дата рождения', 'Категория', 'Предпочтения', 'Важное'];
-  const rows = allGuests.map(g => [
-    `"${(g.full_name || '').replace(/"/g, '""')}"`,
-    `"${(g.phone || '').replace(/"/g, '""')}"`,
-    `"${g.birth_date || ''}"`,
-    `"${g.category || ''}"`,
-    `"${(g.preferences || '').replace(/"/g, '""')}"`,
-    `"${(g.important_info || '').replace(/"/g, '""')}"`
-  ]);
+  let csvContent = '\uFEFF'; // UTF-8 BOM для корректного открытия в Excel
+  csvContent += 'ФИО;Телефон;Дата рождения;Категория;Визитов;Последний визит;Предпочтения;Заметки\n';
 
-  const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+  allGuests.forEach(g => {
+    const row = [
+      `"${g.full_name || ''}"`,
+      `"${g.phone || ''}"`,
+      `"${g.birth_date || ''}"`,
+      `"${g.category || ''}"`,
+      `"${g.visit_count || 0}"`,
+      `"${g.last_visit_date || ''}"`,
+      `"${(g.preferences || '').replace(/"/g, '""')}"`,
+      `"${(g.important_info || '').replace(/"/g, '""')}"`
+    ];
+    csvContent += row.join(';') + '\n';
+  });
+
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.setAttribute('href', url);
-  link.setAttribute('download', `guests_export_${new Date().toISOString().slice(0, 10)}.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  showToast('Экспорт завершен');
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `guests_export_${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
-// --- ИНИЦИАЛИЗАЦИЯ ---
-document.addEventListener('DOMContentLoaded', () => {
-  checkSavedSession();
-  lucide.createIcons();
-});
+// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+function isBirthdaySoon(birthDateStr) {
+  if (!birthDateStr) return false;
+  const today = new Date();
+  const bdate = new Date(birthDateStr);
+  
+  const nextBday = new Date(today.getFullYear(), bdate.getMonth(), bdate.getDate());
+  if (nextBday < today) {
+    nextBday.setFullYear(today.getFullYear() + 1);
+  }
+
+  const diffTime = nextBday - today;
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays >= 0 && diffDays <= 3;
+}
+
+function isInactive(lastVisitStr) {
+  if (!lastVisitStr) return true;
+  const today = new Date();
+  const lastVisit = new Date(lastVisitStr);
+  const diffTime = today - lastVisit;
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays > 30;
+}
+
+function getCategoryBadge(cat) {
+  const map = {
+    'VIP': '<span class="px-2 py-0.5 text-[10px] font-bold rounded-md bg-amber-100 text-amber-800 border border-amber-200">⭐ VIP</span>',
+    'REGULAR': '<span class="px-2 py-0.5 text-[10px] font-bold rounded-md bg-blue-100 text-blue-800 border border-blue-200">Постоянный</span>',
+    'NEW': '<span class="px-2 py-0.5 text-[10px] font-bold rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200">Новый</span>',
+    'PROBLEM': '<span class="px-2 py-0.5 text-[10px] font-bold rounded-md bg-rose-100 text-rose-800 border border-rose-200">Проблема</span>'
+  };
+  return map[cat] || '';
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function formatPhoneInput(e) {
+  let val = e.target.value.replace(/\D/g, '');
+  if (!val.startsWith('996')) val = '996' + val;
+  e.target.value = '+' + val.substring(0, 12);
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+}
+
+function showToast(msg, type = 'info') {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  const bg = type === 'success' ? 'bg-emerald-600' : type === 'error' ? 'bg-rose-600' : 'bg-slate-800';
+  toast.className = `${bg} text-white text-xs sm:text-sm font-semibold px-4 py-3 rounded-xl shadow-lg pointer-events-auto flex items-center gap-2 transition-all duration-300 transform translate-y-2`;
+  toast.innerText = msg;
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.classList.add('opacity-0', 'translate-y-4');
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+function toggleModal(show) {
+  document.getElementById('guest-modal').classList.toggle('hidden', !show);
+}
+
+function toggleVisitsModal(show) {
+  document.getElementById('visits-modal').classList.toggle('hidden', !show);
+}
+
+function showConfirm(text, callback) {
+  document.getElementById('confirm-text').innerText = text;
+  confirmCallback = callback;
+  document.getElementById('confirm-modal').classList.remove('hidden');
+
+  document.getElementById('confirm-ok-btn').onclick = () => {
+    if (confirmCallback) confirmCallback();
+    closeConfirmModal();
+  };
+}
+
+function closeConfirmModal() {
+  document.getElementById('confirm-modal').classList.add('hidden');
+}

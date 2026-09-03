@@ -7,13 +7,13 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Роли и ключи доступа
 const ACCESS_KEYS = {
-  // Директор (доступ ко всей сети)
+  // Генеральный директор (Пароль: 7777)
   '7777': { 
     name: 'Генеральный директор', 
     role: 'ADMIN' 
   },
 
-  // Филиалы
+  // Филиалы и их пароли
   '998': { 
     name: 'Куйбышева (Кореана)', 
     role: 'BRANCH_MANAGER', 
