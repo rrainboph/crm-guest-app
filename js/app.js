@@ -87,6 +87,25 @@ function formatPhoneInput(e) {
   e.target.value = formatted;
 }
 
+// --- ОТПРАВКА ПРИГЛАШЕНИЯ В WHATSAPP ---
+function sendBirthdayInvite(phone, fullName) {
+  if (!phone) return showToast('У гостя не указан номер телефона', 'error');
+
+  let cleanPhone = phone.replace(/\D/g, '');
+  if (cleanPhone.startsWith('0')) cleanPhone = '996' + cleanPhone.slice(1);
+  if (!cleanPhone.startsWith('996') && cleanPhone.length === 9) cleanPhone = '996' + cleanPhone;
+
+  const firstName = fullName ? fullName.split(' ')[0] : 'гость';
+
+  const message = `Здравствуйте, ${firstName}! 👋\n\n` +
+                  `Команда нашего заведения от всей души поздравляет вас с наступающим Днем рождения! 🎂\n\n` +
+                  `В честь праздника мы приготовили для вас подарок — скидку 10% на весь чек и фирменный десерт от шефа! 🎉\n\n` +
+                  `Скидка действует в день рождения и 3 дня после него. Желаете забронировать столик для себя и близких?`;
+
+  const encodedText = encodeURIComponent(message);
+  window.open(`https://wa.me/${cleanPhone}?text=${encodedText}`, '_blank');
+}
+
 // --- АВТОРИЗАЦИЯ ---
 function handleAuth(e) {
   if (e) e.preventDefault();
@@ -189,12 +208,19 @@ function renderSkeletons() {
 
 function changeBranch() { loadGuests(); }
 
-function isBirthdaySoon(dateStr, daysAhead = 7) {
+// Изменено по умолчанию на 3 дня
+function isBirthdaySoon(dateStr, daysAhead = 3) {
   if (!dateStr) return false;
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
   const birthDate = new Date(dateStr);
   const nextBirthday = new Date(today.getFullYear(), birthDate.getMonth(), birthDate.getDate());
-  if (nextBirthday < today) nextBirthday.setFullYear(today.getFullYear() + 1);
+  
+  if (nextBirthday < today) {
+    nextBirthday.setFullYear(today.getFullYear() + 1);
+  }
+  
   const diffDays = Math.ceil((nextBirthday - today) / (1000 * 60 * 60 * 24));
   return diffDays >= 0 && diffDays <= daysAhead;
 }
@@ -218,7 +244,7 @@ function updateStats() {
   }).length;
 
   if (inactiveEl) inactiveEl.innerText = inactiveCount;
-  if (bdayEl) bdayEl.innerText = allGuests.filter(g => isBirthdaySoon(g.birth_date, 7)).length;
+  if (bdayEl) bdayEl.innerText = allGuests.filter(g => isBirthdaySoon(g.birth_date, 3)).length;
 }
 
 function setFilter(mode) {
@@ -236,7 +262,7 @@ function setFilter(mode) {
     if (badgeText) badgeText.innerText = '⚠️ Не были > 30 дней';
   } else if (mode === 'BIRTHDAYS') {
     document.getElementById('card-birthdays')?.classList.add('border-2', 'border-amber-500');
-    if (badgeText) badgeText.innerText = '🎂 ДР в ближайшие 7 дней';
+    if (badgeText) badgeText.innerText = '🎂 ДР в ближайшие 3 дня';
   } else {
     document.getElementById('card-total')?.classList.add('border-2', 'border-emerald-500');
     if (badgeText) badgeText.innerText = 'Все гости';
@@ -256,7 +282,7 @@ function applyFilters() {
     if (!matchesSearch) return false;
 
     if (currentFilterMode === 'VIP') return g.category === 'VIP';
-    if (currentFilterMode === 'BIRTHDAYS') return isBirthdaySoon(g.birth_date, 7);
+    if (currentFilterMode === 'BIRTHDAYS') return isBirthdaySoon(g.birth_date, 3);
     if (currentFilterMode === 'INACTIVE') {
       if (!g.visit_history || g.visit_history.length === 0) return true;
       const lastVisit = new Date(Math.max(...g.visit_history.map(v => new Date(v.visit_date))));
@@ -288,7 +314,17 @@ function renderGuests(guests) {
       lastVisitStr = new Date(sortedVisits[0].visit_date).toLocaleDateString('ru-RU');
     }
 
-    const birthdayWarning = isBirthdaySoon(guest.birth_date, 7) ? '<span class="inline-flex items-center gap-1 text-amber-600 font-bold text-xs bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200"><i data-lucide="cake" class="w-3.5 h-3.5"></i> Скоро ДР!</span>' : '';
+    const hasBirthdaySoon = isBirthdaySoon(guest.birth_date, 3);
+    const birthdayWarning = hasBirthdaySoon ? `
+      <div class="inline-flex items-center gap-1.5 flex-wrap">
+        <span class="inline-flex items-center gap-1 text-amber-600 font-bold text-xs bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+          <i data-lucide="cake" class="w-3.5 h-3.5"></i> Скоро ДР!
+        </span>
+        <button onclick="sendBirthdayInvite('${guest.phone}', '${guest.full_name}')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold px-2 py-0.5 rounded-md transition shadow-sm flex items-center gap-1 active:scale-95">
+          <i data-lucide="message-square" class="w-3 h-3"></i> Пригласить в WA
+        </button>
+      </div>` : '';
+
     const missingPreferences = !guest.preferences ? '<span class="text-amber-600 text-xs font-semibold block mt-0.5 flex items-center gap-1"><i data-lucide="alert-circle" class="w-3 h-3"></i> Укажите предпочтения</span>' : '';
 
     return `
