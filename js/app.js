@@ -188,7 +188,7 @@ function renderGuests(guests) {
 
   guests.forEach(guest => {
     const card = document.createElement('div');
-    card.className = 'bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200/80 space-y-4 hover:shadow-md transition';
+    card.className = 'bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200/80 space-y-3.5 hover:shadow-md transition';
 
     const categoryBadge = getCategoryBadge(guest.category);
     const formattedBirth = formatDate(guest.birth_date);
@@ -199,10 +199,11 @@ function renderGuests(guests) {
     const waText = encodeURIComponent(`Здравствуйте, ${guest.full_name}! Приглашаем вас в наш ресторан.`);
     const waUrl = `https://wa.me/${cleanPhone}?text=${waText}`;
 
-    // Фильтруем заметки для текущего гостя
+    // Заметки управляющего для данного гостя
     const guestNotesList = allNotes.filter(n => n.guest_id === guest.id);
 
     card.innerHTML = `
+      <!-- Верхняя панель карточки -->
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div class="flex items-center gap-2 flex-wrap">
           <h3 class="font-bold text-slate-900 text-base sm:text-lg">${escapeHtml(guest.full_name)}</h3>
@@ -226,7 +227,8 @@ function renderGuests(guests) {
         </div>
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs sm:text-sm text-slate-600 pt-1">
+      <!-- Основная инфо о госте -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs sm:text-sm text-slate-600">
         <div class="flex items-center gap-2">
           <i data-lucide="phone" class="w-4 h-4 text-slate-400"></i>
           <span>${escapeHtml(guest.phone)}</span>
@@ -247,7 +249,31 @@ function renderGuests(guests) {
         </div>
       </div>
 
-      <!-- БЛОК ЗАМЕТОК УПРАВЛЯЮЩЕГО СНИЗУ КАРТОЧКИ -->
+      <!-- БЛОК 1: ПРЕДПОЧТЕНИЯ (Синий блок) -->
+      ${guest.preferences ? `
+        <div class="bg-indigo-50/70 border border-indigo-100 p-3 rounded-xl text-xs text-indigo-950 flex items-start justify-between gap-2">
+          <div class="flex items-start gap-2">
+            <i data-lucide="heart" class="w-4 h-4 text-indigo-500 shrink-0 mt-0.5"></i>
+            <div>
+              <strong class="font-bold text-indigo-900">Предпочтения:</strong> ${escapeHtml(guest.preferences)}
+            </div>
+          </div>
+        </div>
+      ` : ''}
+
+      <!-- БЛОК 2: ВАЖНО (Желтый блок) -->
+      ${guest.important_notes ? `
+        <div class="bg-amber-50/90 border border-amber-200/80 p-3 rounded-xl text-xs text-amber-950 flex items-start justify-between gap-2">
+          <div class="flex items-start gap-2">
+            <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600 shrink-0 mt-0.5"></i>
+            <div>
+              <strong class="font-bold text-amber-900">Важно:</strong> ${escapeHtml(guest.important_notes)}
+            </div>
+          </div>
+        </div>
+      ` : ''}
+
+      <!-- БЛОК 3: ЗАМЕТКИ УПРАВЛЯЮЩЕГО СНИЗУ КАРТОЧКИ -->
       ${currentUser && currentUser.canManageNotes ? `
         <div class="border-t border-slate-100 pt-3 space-y-2">
           <p class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
@@ -356,6 +382,8 @@ function openEditModal(guestId) {
   document.getElementById('phone').value = guest.phone || '';
   document.getElementById('birth_date').value = guest.birth_date || '';
   document.getElementById('category').value = guest.category || 'NEW';
+  document.getElementById('preferences').value = guest.preferences || '';
+  document.getElementById('important_notes').value = guest.important_notes || '';
 
   document.getElementById('modal-title').innerText = 'Редактировать гостя';
   toggleModal(true);
@@ -370,6 +398,8 @@ async function saveGuest(e) {
   const phone = document.getElementById('phone').value.trim();
   const birth_date = document.getElementById('birth_date').value || null;
   const category = document.getElementById('category').value;
+  const preferences = document.getElementById('preferences').value.trim() || null;
+  const important_notes = document.getElementById('important_notes').value.trim() || null;
 
   const branch_id = (currentBranchId !== 'ALL') ? currentBranchId : (currentUser.branchId || '11111111-1111-1111-1111-111111111111');
 
@@ -378,6 +408,8 @@ async function saveGuest(e) {
     phone,
     birth_date,
     category,
+    preferences,
+    important_notes,
     branch_id
   };
 
@@ -533,7 +565,7 @@ function exportToCSV() {
   }
 
   let csvContent = '\uFEFF';
-  csvContent += 'ФИО;Телефон;Дата рождения;Категория;Визитов;Последний визит\n';
+  csvContent += 'ФИО;Телефон;Дата рождения;Категория;Предпочтения;Важно;Визитов;Последний визит\n';
 
   allGuests.forEach(g => {
     const row = [
@@ -541,6 +573,8 @@ function exportToCSV() {
       `"${g.phone || ''}"`,
       `"${g.birth_date || ''}"`,
       `"${g.category || ''}"`,
+      `"${g.preferences || ''}"`,
+      `"${g.important_notes || ''}"`,
       `"${g.visit_count || 0}"`,
       `"${g.last_visit_date || ''}"`
     ];
