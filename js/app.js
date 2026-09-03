@@ -195,9 +195,14 @@ function renderGuests(guests) {
     const formattedLastVisit = formatDate(guest.last_visit_date);
     const visitsCount = guest.visit_count || 0;
 
+    // Ссылка на WhatsApp Поздравления (ТОЛЬКО ЕСЛИ ДР через 0..3 дня)
+    const birthdaySoon = isBirthdaySoon(guest.birth_date);
     const cleanPhone = guest.phone ? guest.phone.replace(/[^0-9]/g, '') : '';
-    const waText = encodeURIComponent(`Здравствуйте, ${guest.full_name}! Приглашаем вас в наш ресторан.`);
+    const waText = encodeURIComponent(`Здравствуйте, ${guest.full_name}! Ресторан поздравляет вас с наступающим Днём рождения! 🥳🎂 Желаем вам счастья и отличного настроения! Будем рады видеть вас у нас!`);
     const waUrl = `https://wa.me/${cleanPhone}?text=${waText}`;
+
+    // Важно: проверяем оба имени поля из Supabase (important_notes и important_info)
+    const importantInfoText = guest.important_notes || guest.important_info || '';
 
     // Заметки управляющего для данного гостя
     const guestNotesList = allNotes.filter(n => n.guest_id === guest.id);
@@ -209,10 +214,15 @@ function renderGuests(guests) {
           <h3 class="font-bold text-slate-900 text-base sm:text-lg">${escapeHtml(guest.full_name)}</h3>
           ${categoryBadge}
         </div>
-        <div class="flex items-center gap-1.5 self-end sm:self-auto">
-          <a href="${waUrl}" target="_blank" title="WhatsApp" class="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-xl transition">
-            <i data-lucide="message-circle" class="w-4 h-4"></i>
-          </a>
+        <div class="flex items-center gap-1.5 self-end sm:self-auto flex-wrap">
+          <!-- КНОПКА WHATSAPP ПОЗДРАВЛЕНИЯ — ТОЛЬКО ЕСЛИ ДР через 0-3 ДНЯ -->
+          ${birthdaySoon ? `
+            <a href="${waUrl}" target="_blank" title="Поздравить в WhatsApp" class="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition border border-emerald-200">
+              <i data-lucide="message-circle" class="w-4 h-4 text-emerald-600"></i>
+              <span>Поздравить</span>
+            </a>
+          ` : ''}
+
           <button onclick="addVisit('${guest.id}')" title="+1 Визит" class="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl text-xs font-semibold flex items-center gap-1 transition">
             <i data-lucide="plus" class="w-3.5 h-3.5"></i> Визит
           </button>
@@ -262,12 +272,12 @@ function renderGuests(guests) {
       ` : ''}
 
       <!-- БЛОК 2: ВАЖНО (Желтый блок) -->
-      ${guest.important_notes ? `
+      ${importantInfoText ? `
         <div class="bg-amber-50/90 border border-amber-200/80 p-3 rounded-xl text-xs text-amber-950 flex items-start justify-between gap-2">
           <div class="flex items-start gap-2">
             <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600 shrink-0 mt-0.5"></i>
             <div>
-              <strong class="font-bold text-amber-900">Важно:</strong> ${escapeHtml(guest.important_notes)}
+              <strong class="font-bold text-amber-900">Важно:</strong> ${escapeHtml(importantInfoText)}
             </div>
           </div>
         </div>
@@ -383,7 +393,7 @@ function openEditModal(guestId) {
   document.getElementById('birth_date').value = guest.birth_date || '';
   document.getElementById('category').value = guest.category || 'NEW';
   document.getElementById('preferences').value = guest.preferences || '';
-  document.getElementById('important_notes').value = guest.important_notes || '';
+  document.getElementById('important_notes').value = guest.important_notes || guest.important_info || '';
 
   document.getElementById('modal-title').innerText = 'Редактировать гостя';
   toggleModal(true);
@@ -410,6 +420,7 @@ async function saveGuest(e) {
     category,
     preferences,
     important_notes,
+    important_info: important_notes, // Записываем в оба поля для совместимости
     branch_id
   };
 
@@ -425,10 +436,11 @@ async function saveGuest(e) {
       if (error) throw error;
 
       if (data && data[0]) {
+        // Создаем запись первичности в историю визитов
         await supabaseClient.from('visit_history').insert([{
           guest_id: data[0].id,
           visit_date: payload.last_visit_date,
-          branch_id: branch_id
+          branch_id: String(branch_id)
         }]);
       }
 
@@ -438,7 +450,7 @@ async function saveGuest(e) {
     toggleModal(false);
     loadGuests();
   } catch (err) {
-    console.error(err);
+    console.error('Ошибка сохранения:', err);
     showToast('Ошибка при сохранении', 'error');
   }
 }
@@ -466,22 +478,22 @@ async function addVisit(guestId) {
   const targetBranch = (currentBranchId !== 'ALL') ? currentBranchId : (guest.branch_id || '11111111-1111-1111-1111-111111111111');
 
   try {
-    // 1. Обновляем счетчик у карточки гостя
+    // 1. Вставляем запись в историю визитов
+    const { error: visitErr } = await supabaseClient.from('visit_history').insert([{
+      guest_id: guestId,
+      visit_date: today,
+      branch_id: String(targetBranch)
+    }]);
+
+    if (visitErr) throw visitErr;
+
+    // 2. Обновляем счетчик и дату у гостя
     const { error: guestErr } = await supabaseClient
       .from('guests')
       .update({ visit_count: newCount, last_visit_date: today })
       .eq('id', guestId);
 
     if (guestErr) throw guestErr;
-
-    // 2. Вставляем запись в историю визитов
-    const { error: visitErr } = await supabaseClient.from('visit_history').insert([{
-      guest_id: guestId,
-      visit_date: today,
-      branch_id: targetBranch
-    }]);
-
-    if (visitErr) console.warn('Ошибка фиксации истории визитов:', visitErr);
 
     showToast('Визит успешно зафиксирован!', 'success');
     loadGuests();
@@ -502,12 +514,19 @@ async function showVisitsHistory(guestId) {
       .from('visit_history')
       .select('*')
       .eq('guest_id', guestId)
-      .order('created_at', { ascending: false });
+      .order('visit_date', { ascending: false });
 
     if (error) throw error;
 
     if (!data || data.length === 0) {
-      container.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">История визитов пуста</p>';
+      container.innerHTML = `
+        <div class="text-center py-6 space-y-2">
+          <p class="text-xs text-slate-400">В истории пока нет записей визитов</p>
+          <button onclick="addVisit('${guestId}'); toggleVisitsModal(false);" class="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-semibold hover:bg-indigo-100">
+            Зафиксировать визит сейчас
+          </button>
+        </div>
+      `;
       return;
     }
 
@@ -517,7 +536,7 @@ async function showVisitsHistory(guestId) {
         <div class="flex justify-between items-center p-2.5 bg-slate-50 rounded-xl text-xs text-slate-700 border border-slate-100">
           <div class="flex items-center gap-2">
             <span>📅 ${formatDate(v.visit_date)}</span>
-            <span class="text-slate-400">${timeStr}</span>
+            <span class="text-slate-400 text-[10px]">${timeStr}</span>
           </div>
           ${currentUser && currentUser.canManageNotes ? `
             <button onclick="deleteVisit('${v.id}', '${guestId}')" title="Удалить визит" class="p-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition">
@@ -541,11 +560,20 @@ async function deleteVisit(visitId, guestId) {
       const { error } = await supabaseClient.from('visit_history').delete().eq('id', visitId);
       if (error) throw error;
 
-      const guest = allGuests.find(g => g.id === guestId);
-      if (guest) {
-        const newCount = Math.max(0, (guest.visit_count || 1) - 1);
-        await supabaseClient.from('guests').update({ visit_count: newCount }).eq('id', guestId);
-      }
+      // Пересчитываем кол-во оставшихся визитов
+      const { data: remainingVisits } = await supabaseClient
+        .from('visit_history')
+        .select('id, visit_date')
+        .eq('guest_id', guestId)
+        .order('visit_date', { ascending: false });
+
+      const count = remainingVisits ? remainingVisits.length : 0;
+      const lastDate = count > 0 ? remainingVisits[0].visit_date : null;
+
+      await supabaseClient.from('guests').update({ 
+        visit_count: count, 
+        last_visit_date: lastDate 
+      }).eq('id', guestId);
 
       showToast('Визит удален', 'success');
       showVisitsHistory(guestId);
@@ -568,13 +596,14 @@ function exportToCSV() {
   csvContent += 'ФИО;Телефон;Дата рождения;Категория;Предпочтения;Важно;Визитов;Последний визит\n';
 
   allGuests.forEach(g => {
+    const importantText = g.important_notes || g.important_info || '';
     const row = [
       `"${g.full_name || ''}"`,
       `"${g.phone || ''}"`,
       `"${g.birth_date || ''}"`,
       `"${g.category || ''}"`,
       `"${g.preferences || ''}"`,
-      `"${g.important_notes || ''}"`,
+      `"${importantText}"`,
       `"${g.visit_count || 0}"`,
       `"${g.last_visit_date || ''}"`
     ];
@@ -594,8 +623,11 @@ function exportToCSV() {
 function isBirthdaySoon(birthDateStr) {
   if (!birthDateStr) return false;
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
   const bdate = new Date(birthDateStr);
-  
+  if (isNaN(bdate.getTime())) return false;
+
   const nextBday = new Date(today.getFullYear(), bdate.getMonth(), bdate.getDate());
   if (nextBday < today) {
     nextBday.setFullYear(today.getFullYear() + 1);
@@ -628,6 +660,7 @@ function getCategoryBadge(cat) {
 function formatDate(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
   return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
