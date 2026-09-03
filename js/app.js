@@ -71,9 +71,13 @@ function initBranchSelect() {
     select.disabled = false;
     let options = '<option value="ALL">🌐 Все филиалы (Вся сеть)</option>';
     
+    // Исключаем дубликаты за счет фильтрации уникальных branchId
+    const addedBranches = new Set();
     Object.values(ACCESS_KEYS).forEach(item => {
-      if (item.branchId) {
-        options += `<option value="${item.branchId}">${item.name}</option>`;
+      if (item.branchId && !addedBranches.has(item.branchId)) {
+        addedBranches.add(item.branchId);
+        const cleanName = item.name.replace(/^(Управляющий — |Администратор — )/, '');
+        options += `<option value="${item.branchId}">${cleanName}</option>`;
       }
     });
     
@@ -81,7 +85,8 @@ function initBranchSelect() {
     select.value = currentBranchId || 'ALL';
   } else {
     select.disabled = true;
-    select.innerHTML = `<option value="${currentUser.branchId}">${currentUser.name}</option>`;
+    const cleanName = currentUser.name.replace(/^(Управляющий — |Администратор — )/, '');
+    select.innerHTML = `<option value="${currentUser.branchId}">${cleanName}</option>`;
     currentBranchId = currentUser.branchId;
   }
 }
@@ -97,13 +102,11 @@ async function loadGuests() {
   try {
     let query = supabaseClient.from('guests').select('*').order('created_at', { ascending: false });
 
-    // Фильтр по филиалу если выбит конкретный точка
     if (currentBranchId !== 'ALL') {
       query = query.eq('branch_id', currentBranchId);
     }
 
     const { data, error } = await query;
-
     if (error) throw error;
 
     allGuests = data || [];
@@ -142,7 +145,6 @@ function applyFilters() {
 function setFilter(filterType) {
   currentFilter = filterType;
   
-  // Визуальное выделение карточек
   const cards = {
     'ALL': 'card-total',
     'BIRTHDAYS': 'card-birthdays',
@@ -194,7 +196,6 @@ function renderGuests(guests) {
     const formattedLastVisit = formatDate(guest.last_visit_date);
     const visitsCount = guest.visit_count || 0;
 
-    // Ссылка на WhatsApp
     const cleanPhone = guest.phone ? guest.phone.replace(/[^0-9]/g, '') : '';
     const waText = encodeURIComponent(`Здравствуйте, ${guest.full_name}! Приглашаем вас в наш ресторан.`);
     const waUrl = `https://wa.me/${cleanPhone}?text=${waText}`;
@@ -215,9 +216,11 @@ function renderGuests(guests) {
           <button onclick="openEditModal('${guest.id}')" title="Изменить" class="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition">
             <i data-lucide="edit-3" class="w-4 h-4"></i>
           </button>
-          <button onclick="deleteGuest('${guest.id}')" title="Удалить" class="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition">
-            <i data-lucide="trash-2" class="w-4 h-4"></i>
-          </button>
+          ${currentUser && currentUser.canManageNotes ? `
+            <button onclick="deleteGuest('${guest.id}')" title="Удалить" class="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+          ` : ''}
         </div>
       </div>
 
@@ -263,25 +266,31 @@ function renderGuests(guests) {
   lucide.createIcons();
 }
 
-// СТАЦИОНАРНАЯ СТАТИСТИКА
+// СТАТИСТИКА
 function updateStats() {
   document.getElementById('stat-total').innerText = allGuests.length;
-  
-  const vipCount = allGuests.filter(g => g.category === 'VIP').length;
-  document.getElementById('stat-vip').innerText = vipCount;
-
-  const birthdayCount = allGuests.filter(g => isBirthdaySoon(g.birth_date)).length;
-  document.getElementById('stat-birthdays').innerText = birthdayCount;
-
-  const inactiveCount = allGuests.filter(g => isInactive(g.last_visit_date)).length;
-  document.getElementById('stat-inactive').innerText = inactiveCount;
+  document.getElementById('stat-vip').innerText = allGuests.filter(g => g.category === 'VIP').length;
+  document.getElementById('stat-birthdays').innerText = allGuests.filter(g => isBirthdaySoon(g.birth_date)).length;
+  document.getElementById('stat-inactive').innerText = allGuests.filter(g => isInactive(g.last_visit_date)).length;
 }
 
-// МОДАЛКА И СОХРАНЕНИЕ
+// МОДАЛКА И ВИДИМОСТЬ ПОЛЕЙ ЗАМЕТОК
+function updateNotesVisibility() {
+  const container = document.getElementById('notes-fields-container');
+  if (container) {
+    if (currentUser && currentUser.canManageNotes) {
+      container.classList.remove('hidden');
+    } else {
+      container.classList.add('hidden');
+    }
+  }
+}
+
 function openCreateModal() {
   document.getElementById('edit_guest_id').value = '';
   document.getElementById('add-guest-form').reset();
   document.getElementById('modal-title').innerText = 'Новый гость';
+  updateNotesVisibility();
   toggleModal(true);
 }
 
@@ -298,9 +307,11 @@ function openEditModal(guestId) {
   document.getElementById('important_info').value = guest.important_info || '';
 
   document.getElementById('modal-title').innerText = 'Редактировать гостя';
+  updateNotesVisibility();
   toggleModal(true);
 }
 
+// СОХРАНЕНИЕ ГОСТЯ
 async function saveGuest(e) {
   e.preventDefault();
 
@@ -309,10 +320,7 @@ async function saveGuest(e) {
   const phone = document.getElementById('phone').value.trim();
   const birth_date = document.getElementById('birth_date').value || null;
   const category = document.getElementById('category').value;
-  const preferences = document.getElementById('preferences').value.trim();
-  const important_info = document.getElementById('important_info').value.trim();
 
-  // Привязка филиала
   const branch_id = (currentBranchId !== 'ALL') ? currentBranchId : (currentUser.branchId || '11111111-1111-1111-1111-111111111111');
 
   const payload = {
@@ -320,10 +328,14 @@ async function saveGuest(e) {
     phone,
     birth_date,
     category,
-    preferences,
-    important_info,
     branch_id
   };
+
+  // Добавляем предпочтения и важную информацию только если пользователь управляющий
+  if (currentUser && currentUser.canManageNotes) {
+    payload.preferences = document.getElementById('preferences').value.trim();
+    payload.important_info = document.getElementById('important_info').value.trim();
+  }
 
   try {
     if (id) {
@@ -368,7 +380,6 @@ async function addVisit(guestId) {
   const newCount = (guest.visit_count || 0) + 1;
 
   try {
-    // 1. Обновляем карточку гостя
     const { error: gErr } = await supabaseClient
       .from('guests')
       .update({ visit_count: newCount, last_visit_date: today })
@@ -376,7 +387,6 @@ async function addVisit(guestId) {
 
     if (gErr) throw gErr;
 
-    // 2. Добавляем запись в историю визитов
     await supabaseClient.from('visit_history').insert([{
       guest_id: guestId,
       visit_date: today,
@@ -391,7 +401,7 @@ async function addVisit(guestId) {
   }
 }
 
-// ПОКАЗ ИСТОРИИ ВИЗИТОВ
+// ИСТОРИЯ ВИЗИТОВ И УДАЛЕНИЕ ВИЗИТА
 async function showVisitsHistory(guestId) {
   const container = document.getElementById('visits-modal-list');
   container.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">Загрузка истории...</p>';
@@ -412,14 +422,45 @@ async function showVisitsHistory(guestId) {
     }
 
     container.innerHTML = data.map(v => `
-      <div class="flex justify-between items-center p-2.5 bg-slate-50 rounded-xl text-xs text-slate-700">
-        <span>📅 ${formatDate(v.visit_date)}</span>
-        <span class="text-slate-400">${new Date(v.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+      <div class="flex justify-between items-center p-2.5 bg-slate-50 rounded-xl text-xs text-slate-700 border border-slate-100">
+        <div class="flex items-center gap-2">
+          <span>📅 ${formatDate(v.visit_date)}</span>
+          <span class="text-slate-400">${new Date(v.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+        </div>
+        ${currentUser && currentUser.canManageNotes ? `
+          <button onclick="deleteVisit('${v.id}', '${guestId}')" title="Удалить визит" class="p-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          </button>
+        ` : ''}
       </div>
     `).join('');
+
+    lucide.createIcons();
   } catch (err) {
     container.innerHTML = '<p class="text-xs text-rose-500 text-center py-4">Ошибка загрузки</p>';
   }
+}
+
+async function deleteVisit(visitId, guestId) {
+  showConfirm('Удалить этот визит из истории?', async () => {
+    try {
+      const { error } = await supabaseClient.from('visit_history').delete().eq('id', visitId);
+      if (error) throw error;
+
+      const guest = allGuests.find(g => g.id === guestId);
+      if (guest) {
+        const newCount = Math.max(0, (guest.visit_count || 1) - 1);
+        await supabaseClient.from('guests').update({ visit_count: newCount }).eq('id', guestId);
+      }
+
+      showToast('Визит удален', 'success');
+      showVisitsHistory(guestId);
+      loadGuests();
+    } catch (err) {
+      console.error(err);
+      showToast('Ошибка при удалении визита', 'error');
+    }
+  });
 }
 
 // ЭКСПОРТ В CSV
@@ -429,7 +470,7 @@ function exportToCSV() {
     return;
   }
 
-  let csvContent = '\uFEFF'; // UTF-8 BOM для корректного открытия в Excel
+  let csvContent = '\uFEFF';
   csvContent += 'ФИО;Телефон;Дата рождения;Категория;Визитов;Последний визит;Предпочтения;Заметки\n';
 
   allGuests.forEach(g => {
