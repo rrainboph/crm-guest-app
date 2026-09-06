@@ -7,6 +7,10 @@ let allNotes = [];
 let currentFilter = 'ALL';
 let confirmCallback = null;
 
+// Флаги защиты от двойных нажатий (Double Click Guard)
+let isAddingVisit = false;
+let isAddingNote = false;
+
 document.addEventListener('DOMContentLoaded', () => {
   lucide.createIcons();
   checkSavedAuth();
@@ -201,7 +205,7 @@ function renderGuests(guests) {
     const waText = encodeURIComponent(`Здравствуйте, ${guest.full_name}! Ресторан поздравляет вас с наступающим Днём рождения! 🥳🎂 Желаем вам счастья и отличного настроения! Будем рады видеть вас у нас!`);
     const waUrl = `https://wa.me/${cleanPhone}?text=${waText}`;
 
-    // Важно: проверяем оба имени поля из Supabase (important_notes и important_info)
+    // Проверяем оба имени поля из Supabase (important_notes и important_info)
     const importantInfoText = guest.important_notes || guest.important_info || '';
 
     // Заметки управляющего для данного гостя
@@ -325,8 +329,10 @@ function renderGuests(guests) {
   lucide.createIcons();
 }
 
-// ДОБАВЛЕНИЕ И УДАЛЕНИЕ ЗАМЕТОК УПРАВЛЯЮЩЕГО
+// ДОБАВЛЕНИЕ И УДАЛЕНИЕ ЗАМЕТОК УПРАВЛЯЮЩЕГО (С защитой от двойного нажатия)
 async function addManagerNote(guestId) {
+  if (isAddingNote) return;
+
   const input = document.getElementById(`note-input-${guestId}`);
   if (!input) return;
 
@@ -335,6 +341,8 @@ async function addManagerNote(guestId) {
     showToast('Введите текст заметки', 'error');
     return;
   }
+
+  isAddingNote = true;
 
   try {
     const { error } = await supabaseClient.from('guest_notes').insert([{
@@ -350,6 +358,8 @@ async function addManagerNote(guestId) {
   } catch (err) {
     console.error('Ошибка добавления заметки:', err);
     showToast('Ошибка при сохранении заметки в БД', 'error');
+  } finally {
+    isAddingNote = false;
   }
 }
 
@@ -399,9 +409,18 @@ function openEditModal(guestId) {
   toggleModal(true);
 }
 
-// СОХРАНЕНИЕ И ОБНОВЛЕНИЕ ГОСТЯ
+// СОХРАНЕНИЕ И ОБНОВЛЕНИЕ ГОСТЯ (С блокировкой кнопки)
 async function saveGuest(e) {
   e.preventDefault();
+
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  if (submitBtn && submitBtn.disabled) return;
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.dataset.originalText = submitBtn.innerHTML;
+    submitBtn.innerText = 'Сохранение...';
+  }
 
   const id = document.getElementById('edit_guest_id').value;
   const full_name = document.getElementById('full_name').value.trim();
@@ -452,6 +471,11 @@ async function saveGuest(e) {
   } catch (err) {
     console.error('Ошибка сохранения:', err);
     showToast('Ошибка при сохранении', 'error');
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = submitBtn.dataset.originalText || 'Сохранить';
+    }
   }
 }
 
@@ -468,10 +492,14 @@ async function deleteGuest(id) {
   });
 }
 
-// ФИКСАЦИЯ ВИЗИТА
+// ФИКСАЦИЯ ВИЗИТА (С защитой от двойного нажатия)
 async function addVisit(guestId) {
+  if (isAddingVisit) return;
+
   const guest = allGuests.find(g => g.id === guestId);
   if (!guest) return;
+
+  isAddingVisit = true;
 
   const today = new Date().toISOString().split('T')[0];
   const newCount = (guest.visit_count || 0) + 1;
@@ -500,6 +528,8 @@ async function addVisit(guestId) {
   } catch (err) {
     console.error('Ошибка записи визита:', err);
     showToast('Ошибка при фиксации визита в БД', 'error');
+  } finally {
+    isAddingVisit = false;
   }
 }
 
