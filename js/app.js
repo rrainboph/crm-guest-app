@@ -97,12 +97,16 @@ function changeBranch() {
   loadGuests();
 }
 
-// ЗАГРУЗКА ГОСТЕЙ И ЗАМЕТОК
+// ЗАГРУЗКА ГОСТЕЙ И ЗАМЕТОК (Со сквозным поиском)
 async function loadGuests() {
   try {
+    const searchVal = document.getElementById('search')?.value.trim() || '';
     let query = supabaseClient.from('guests').select('*').order('created_at', { ascending: false });
 
-    if (currentBranchId !== 'ALL') {
+    // Если введен текст поиска — ищем по всей базе сети
+    if (searchVal) {
+      query = query.or(`phone.ilike.%${searchVal}%,full_name.ilike.%${searchVal}%`);
+    } else if (currentBranchId !== 'ALL') {
       query = query.eq('branch_id', currentBranchId);
     }
 
@@ -127,10 +131,11 @@ async function loadGuests() {
 
 // ФИЛЬТРАЦИЯ
 function applyFilters() {
-  const searchVal = document.getElementById('search').value.toLowerCase().trim();
+  const searchVal = document.getElementById('search')?.value.toLowerCase().trim() || '';
   
   let filtered = allGuests.filter(guest => {
-    const matchesSearch = (guest.full_name && guest.full_name.toLowerCase().includes(searchVal)) ||
+    const matchesSearch = !searchVal || 
+                          (guest.full_name && guest.full_name.toLowerCase().includes(searchVal)) ||
                           (guest.phone && guest.phone.includes(searchVal));
     
     if (!matchesSearch) return false;
@@ -170,13 +175,16 @@ function setFilter(filterType) {
   const activeEl = document.getElementById(cards[filterType]);
   if (activeEl) activeEl.classList.add('ring-2', 'ring-indigo-500');
 
-  document.getElementById('filter-name-text').innerText = names[filterType];
+  const filterNameText = document.getElementById('filter-name-text');
+  if (filterNameText) filterNameText.innerText = names[filterType];
+  
   applyFilters();
 }
 
 // РЕНДЕР КАРТОЧЕК
 function renderGuests(guests) {
   const container = document.getElementById('guests-list');
+  if (!container) return;
   container.innerHTML = '';
 
   if (guests.length === 0) {
@@ -205,8 +213,7 @@ function renderGuests(guests) {
     const waText = encodeURIComponent(`Здравствуйте, ${guest.full_name}! Ресторан поздравляет вас с наступающим Днём рождения! 🥳🎂 Желаем вам счастья и отличного настроения! Будем рады видеть вас у нас!`);
     const waUrl = `https://wa.me/${cleanPhone}?text=${waText}`;
 
-    // Проверяем оба имени поля из Supabase (important_notes и important_info)
-    const importantInfoText = guest.important_notes || guest.important_info || '';
+    const importantInfoText = guest.important_notes || '';
 
     // Заметки управляющего для данного гостя
     const guestNotesList = allNotes.filter(n => n.guest_id === guest.id);
@@ -219,7 +226,6 @@ function renderGuests(guests) {
           ${categoryBadge}
         </div>
         <div class="flex items-center gap-1.5 self-end sm:self-auto flex-wrap">
-          <!-- КНОПКА WHATSAPP ПОЗДРАВЛЕНИЯ — ТОЛЬКО ЕСЛИ ДР через 0-3 ДНЯ -->
           ${birthdaySoon ? `
             <a href="${waUrl}" target="_blank" title="Поздравить в WhatsApp" class="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition border border-emerald-200">
               <i data-lucide="message-circle" class="w-4 h-4 text-emerald-600"></i>
@@ -263,7 +269,7 @@ function renderGuests(guests) {
         </div>
       </div>
 
-      <!-- БЛОК 1: ПРЕДПОЧТЕНИЯ (Синий блок) -->
+      <!-- БЛОК 1: ПРЕДПОЧТЕНИЯ -->
       ${guest.preferences ? `
         <div class="bg-indigo-50/70 border border-indigo-100 p-3 rounded-xl text-xs text-indigo-950 flex items-start justify-between gap-2">
           <div class="flex items-start gap-2">
@@ -275,7 +281,7 @@ function renderGuests(guests) {
         </div>
       ` : ''}
 
-      <!-- БЛОК 2: ВАЖНО (Желтый блок) -->
+      <!-- БЛОК 2: ВАЖНО -->
       ${importantInfoText ? `
         <div class="bg-amber-50/90 border border-amber-200/80 p-3 rounded-xl text-xs text-amber-950 flex items-start justify-between gap-2">
           <div class="flex items-start gap-2">
@@ -287,14 +293,13 @@ function renderGuests(guests) {
         </div>
       ` : ''}
 
-      <!-- БЛОК 3: ЗАМЕТКИ УПРАВЛЯЮЩЕГО СНИЗУ КАРТОЧКИ -->
+      <!-- БЛОК 3: ЗАМЕТКИ УПРАВЛЯЮЩЕГО -->
       ${currentUser && currentUser.canManageNotes ? `
         <div class="border-t border-slate-100 pt-3 space-y-2">
           <p class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
             <i data-lucide="sticky-note" class="w-3.5 h-3.5 text-amber-500"></i> Заметки управляющего:
           </p>
 
-          <!-- Форма добавления заметки -->
           <div class="flex items-center gap-2">
             <input type="text" id="note-input-${guest.id}" placeholder="Введите новую заметку..." 
               class="flex-1 text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500">
@@ -303,7 +308,6 @@ function renderGuests(guests) {
             </button>
           </div>
 
-          <!-- Список добавленных заметок -->
           <div class="space-y-1.5 max-h-40 overflow-y-auto pt-1">
             ${guestNotesList.length === 0 ? `
               <p class="text-[11px] text-slate-400 italic">Заметок пока нет</p>
@@ -329,7 +333,7 @@ function renderGuests(guests) {
   lucide.createIcons();
 }
 
-// ДОБАВЛЕНИЕ И УДАЛЕНИЕ ЗАМЕТОК УПРАВЛЯЮЩЕГО (С защитой от двойного нажатия)
+// ДОБАВЛЕНИЕ И УДАЛЕНИЕ ЗАМЕТОК УПРАВЛЯЮЩЕГО
 async function addManagerNote(guestId) {
   if (isAddingNote) return;
 
@@ -380,10 +384,15 @@ async function deleteManagerNote(noteId) {
 
 // СТАТИСТИКА
 function updateStats() {
-  document.getElementById('stat-total').innerText = allGuests.length;
-  document.getElementById('stat-vip').innerText = allGuests.filter(g => g.category === 'VIP').length;
-  document.getElementById('stat-birthdays').innerText = allGuests.filter(g => isBirthdaySoon(g.birth_date)).length;
-  document.getElementById('stat-inactive').innerText = allGuests.filter(g => isInactive(g.last_visit_date)).length;
+  const elTotal = document.getElementById('stat-total');
+  const elVip = document.getElementById('stat-vip');
+  const elBdays = document.getElementById('stat-birthdays');
+  const elInactive = document.getElementById('stat-inactive');
+
+  if (elTotal) elTotal.innerText = allGuests.length;
+  if (elVip) elVip.innerText = allGuests.filter(g => g.category === 'VIP').length;
+  if (elBdays) elBdays.innerText = allGuests.filter(g => isBirthdaySoon(g.birth_date)).length;
+  if (elInactive) elInactive.innerText = allGuests.filter(g => isInactive(g.last_visit_date)).length;
 }
 
 function openCreateModal() {
@@ -403,13 +412,13 @@ function openEditModal(guestId) {
   document.getElementById('birth_date').value = guest.birth_date || '';
   document.getElementById('category').value = guest.category || 'NEW';
   document.getElementById('preferences').value = guest.preferences || '';
-  document.getElementById('important_notes').value = guest.important_notes || guest.important_info || '';
+  document.getElementById('important_notes').value = guest.important_notes || '';
 
   document.getElementById('modal-title').innerText = 'Редактировать гостя';
   toggleModal(true);
 }
 
-// СОХРАНЕНИЕ И ОБНОВЛЕНИЕ ГОСТЯ (С блокировкой кнопки)
+// СОХРАНЕНИЕ И ОБНОВЛЕНИЕ ГОСТЯ
 async function saveGuest(e) {
   e.preventDefault();
 
@@ -430,6 +439,16 @@ async function saveGuest(e) {
   const preferences = document.getElementById('preferences').value.trim() || null;
   const important_notes = document.getElementById('important_notes').value.trim() || null;
 
+  // Проверка на режим "Все филиалы" для нового гостя
+  if (!id && currentBranchId === 'ALL' && !currentUser.branchId) {
+    showToast('Выберите конкретный филиал в верхнем меню перед созданием гостя!', 'error');
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = submitBtn.dataset.originalText || 'Сохранить';
+    }
+    return;
+  }
+
   const branch_id = (currentBranchId !== 'ALL') ? currentBranchId : (currentUser.branchId || '11111111-1111-1111-1111-111111111111');
 
   const payload = {
@@ -439,7 +458,6 @@ async function saveGuest(e) {
     category,
     preferences,
     important_notes,
-    important_info: important_notes, // Записываем в оба поля для совместимости
     branch_id
   };
 
@@ -455,7 +473,6 @@ async function saveGuest(e) {
       if (error) throw error;
 
       if (data && data[0]) {
-        // Создаем запись первичности в историю визитов
         await supabaseClient.from('visit_history').insert([{
           guest_id: data[0].id,
           visit_date: payload.last_visit_date,
@@ -470,7 +487,13 @@ async function saveGuest(e) {
     loadGuests();
   } catch (err) {
     console.error('Ошибка сохранения:', err);
-    showToast('Ошибка при сохранении', 'error');
+    if (err.status === 409 || err.code === '23505') {
+      showToast('Этот номер уже есть в базе сети! Найдите гостя через поиск.', 'error');
+    } else if (err.code === '23503') {
+      showToast('Ошибка филиала! Выберите конкретный филиал.', 'error');
+    } else {
+      showToast('Ошибка при сохранении гостя', 'error');
+    }
   } finally {
     if (submitBtn) {
       submitBtn.disabled = false;
@@ -492,7 +515,7 @@ async function deleteGuest(id) {
   });
 }
 
-// ФИКСАЦИЯ ВИЗИТА (С защитой от двойного нажатия)
+// ФИКСАЦИЯ ВИЗИТА
 async function addVisit(guestId) {
   if (isAddingVisit) return;
 
@@ -506,7 +529,6 @@ async function addVisit(guestId) {
   const targetBranch = (currentBranchId !== 'ALL') ? currentBranchId : (guest.branch_id || '11111111-1111-1111-1111-111111111111');
 
   try {
-    // 1. Вставляем запись в историю визитов
     const { error: visitErr } = await supabaseClient.from('visit_history').insert([{
       guest_id: guestId,
       visit_date: today,
@@ -515,7 +537,6 @@ async function addVisit(guestId) {
 
     if (visitErr) throw visitErr;
 
-    // 2. Обновляем счетчик и дату у гостя
     const { error: guestErr } = await supabaseClient
       .from('guests')
       .update({ visit_count: newCount, last_visit_date: today })
@@ -536,6 +557,7 @@ async function addVisit(guestId) {
 // ИСТОРИЯ ВИЗИТОВ
 async function showVisitsHistory(guestId) {
   const container = document.getElementById('visits-modal-list');
+  if (!container) return;
   container.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">Загрузка истории...</p>';
   toggleVisitsModal(true);
 
@@ -590,7 +612,6 @@ async function deleteVisit(visitId, guestId) {
       const { error } = await supabaseClient.from('visit_history').delete().eq('id', visitId);
       if (error) throw error;
 
-      // Пересчитываем кол-во оставшихся визитов
       const { data: remainingVisits } = await supabaseClient
         .from('visit_history')
         .select('id, visit_date')
@@ -615,26 +636,29 @@ async function deleteVisit(visitId, guestId) {
   });
 }
 
-// ЭКСПОРТ
+// ЭКСПОРТ С ЗАЩИТОЙ ДЛЯ EXCEL
 function exportToCSV() {
   if (allGuests.length === 0) {
     showToast('Нет данных для экспорта', 'error');
     return;
   }
 
-  let csvContent = '\uFEFF';
+  let csvContent = '\uFEFF'; // UTF-8 BOM для правильного чтения кириллицы
   csvContent += 'ФИО;Телефон;Дата рождения;Категория;Предпочтения;Важно;Визитов;Последний визит\n';
 
   allGuests.forEach(g => {
-    const importantText = g.important_notes || g.important_info || '';
+    const importantText = g.important_notes || '';
+    // Форматирование телефона =""\t..."" предотвращает научную нотацию в Excel
+    const phoneFormatted = g.phone ? `="\t${g.phone}"` : '""';
+    
     const row = [
-      `"${g.full_name || ''}"`,
-      `"${g.phone || ''}"`,
+      `"${(g.full_name || '').replace(/"/g, '""')}"`,
+      phoneFormatted,
       `"${g.birth_date || ''}"`,
       `"${g.category || ''}"`,
-      `"${g.preferences || ''}"`,
-      `"${importantText}"`,
-      `"${g.visit_count || 0}"`,
+      `"${(g.preferences || '').replace(/"/g, '""')}"`,
+      `"${importantText.replace(/"/g, '""')}"`,
+      g.visit_count || 0,
       `"${g.last_visit_date || ''}"`
     ];
     csvContent += row.join(';') + '\n';
@@ -645,8 +669,11 @@ function exportToCSV() {
   const a = document.createElement('a');
   a.href = url;
   a.download = `guests_export_${new Date().toISOString().split('T')[0]}.csv`;
+  document.body.appendChild(a);
   a.click();
+  document.body.removeChild(a);
   URL.revokeObjectURL(url);
+  showToast('Выгрузка списка успешно создана', 'success');
 }
 
 // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -707,6 +734,7 @@ function escapeHtml(str) {
 
 function showToast(msg, type = 'info') {
   const container = document.getElementById('toast-container');
+  if (!container) return;
   const toast = document.createElement('div');
   const bg = type === 'success' ? 'bg-emerald-600' : type === 'error' ? 'bg-rose-600' : 'bg-slate-800';
   toast.className = `${bg} text-white text-xs sm:text-sm font-semibold px-4 py-3 rounded-xl shadow-lg pointer-events-auto flex items-center gap-2 transition-all duration-300 transform translate-y-2`;
@@ -720,24 +748,33 @@ function showToast(msg, type = 'info') {
 }
 
 function toggleModal(show) {
-  document.getElementById('guest-modal').classList.toggle('hidden', !show);
+  const modal = document.getElementById('guest-modal');
+  if (modal) modal.classList.toggle('hidden', !show);
 }
 
 function toggleVisitsModal(show) {
-  document.getElementById('visits-modal').classList.toggle('hidden', !show);
+  const modal = document.getElementById('visits-modal');
+  if (modal) modal.classList.toggle('hidden', !show);
 }
 
 function showConfirm(text, callback) {
-  document.getElementById('confirm-text').innerText = text;
-  confirmCallback = callback;
-  document.getElementById('confirm-modal').classList.remove('hidden');
+  const modal = document.getElementById('confirm-modal');
+  const confirmText = document.getElementById('confirm-text');
+  const okBtn = document.getElementById('confirm-ok-btn');
 
-  document.getElementById('confirm-ok-btn').onclick = () => {
-    if (confirmCallback) confirmCallback();
-    closeConfirmModal();
-  };
+  if (confirmText) confirmText.innerText = text;
+  confirmCallback = callback;
+  if (modal) modal.classList.remove('hidden');
+
+  if (okBtn) {
+    okBtn.onclick = () => {
+      if (confirmCallback) confirmCallback();
+      closeConfirmModal();
+    };
+  }
 }
 
 function closeConfirmModal() {
-  document.getElementById('confirm-modal').classList.add('hidden');
+  const modal = document.getElementById('confirm-modal');
+  if (modal) modal.classList.add('hidden');
 }
