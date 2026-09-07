@@ -94,19 +94,21 @@ function initBranchSelect() {
 function changeBranch() {
   const select = document.getElementById('branch-select');
   currentBranchId = select.value;
+  
+  // Очищаем поисковую строку при смене филиала
+  const searchInput = document.getElementById('search');
+  if (searchInput) searchInput.value = '';
+
   loadGuests();
 }
 
-// ЗАГРУЗКА ГОСТЕЙ И ЗАМЕТОК (Со сквозным поиском)
+// ЗАГРУЗКА ГОСТЕЙ И ЗАМЕТОК
 async function loadGuests() {
   try {
-    const searchVal = document.getElementById('search')?.value.trim() || '';
     let query = supabaseClient.from('guests').select('*').order('created_at', { ascending: false });
 
-    // Если введен текст поиска — ищем по всей базе сети
-    if (searchVal) {
-      query = query.or(`phone.ilike.%${searchVal}%,full_name.ilike.%${searchVal}%`);
-    } else if (currentBranchId !== 'ALL') {
+    // Фильтрация строго по выбранному филиалу
+    if (currentBranchId !== 'ALL') {
       query = query.eq('branch_id', currentBranchId);
     }
 
